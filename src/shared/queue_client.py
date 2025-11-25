@@ -25,9 +25,8 @@ class QueueClientWrapper:
             account_name: Azure Storage account name
             queue_name: Name of the queue
         """
-        # Derive account name from a connection string if provided; otherwise treat the
-        # value as the account name directly. Use DefaultAzureCredential for auth instead
-        # of embedding secrets in a connection string.
+        # Use the provided account name to construct the account URL for authentication
+        # via DefaultAzureCredential, rather than embedding secrets in a connection string.
         account_url = f"https://{account_name}.queue.core.windows.net"
         self._queue_client = QueueClient(
             account_url=account_url,

@@ -112,7 +112,7 @@ def main() -> None:
     settings = BackendSettings()
 
     if not settings.azure_storage_account_name:
-        logger.error("Azure Storage connection string is required")
+        logger.error("Azure Storage account name is required")
         return
 
     service = BackendService(settings)
