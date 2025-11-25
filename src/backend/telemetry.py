@@ -178,11 +178,13 @@ class TelemetryClient:
         if span:
             span.finish()
             # Use the span's own context_tracer exporter to ensure correct export
-            if hasattr(span, "context_tracer") and hasattr(span.context_tracer, "exporter"):
+            try:
                 span.context_tracer.exporter.export([span])
-            elif self._tracer:
-                # Fallback to default tracer exporter
-                self._tracer.exporter.export([span])
+            except (AttributeError, TypeError) as e:
+                # Fallback to default tracer exporter if span doesn't have proper context_tracer
+                logger.debug("Failed to use span context_tracer, using default: %s", e)
+                if self._tracer:
+                    self._tracer.exporter.export([span])
 
     def _generate_trace_id(self, workflow_run_id: str) -> str:
         """Generate a trace ID from workflow_run_id.
@@ -192,9 +194,15 @@ class TelemetryClient:
 
         Returns:
             32-character hex trace ID
+
+        Note:
+            OpenCensus trace_id should be 32 hex characters (16 bytes).
+            Using SHA256 hash ensures consistency and avoids collisions since
+            workflow_run_id is unique per GitHub workflow run.
         """
         # Generate a consistent 32-character hex string from workflow_run_id
         hash_obj = hashlib.sha256(str(workflow_run_id).encode())
+        # Use first 32 chars (16 bytes) - sufficient for unique workflow_run_id space
         return hash_obj.hexdigest()[:32]
 
     def track_workflow_event(
