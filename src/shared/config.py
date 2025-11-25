@@ -36,7 +36,7 @@ class FrontendSettings(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def _sanitize(cls, values: dict) -> dict:  # type: ignore[misc]
+    def _sanitize(cls, values: dict[str, object]) -> dict[str, object]:
         # If port is a non-numeric placeholder string, drop it so default applies
         if isinstance(values, dict):
             port_val = values.get("port")
