@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from src.backend.telemetry import TelemetryClient
 from src.shared.models import (
     JobMetrics,
     QueueMessage,
@@ -11,7 +12,6 @@ from src.shared.models import (
     WorkflowMetrics,
     WorkflowRunEvent,
 )
-from src.shared.telemetry import TelemetryClient
 
 logger = logging.getLogger(__name__)
 

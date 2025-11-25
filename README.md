@@ -66,17 +66,17 @@ pip install -e ".[dev]"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `FRONTEND_HOST` | Host to bind the server | `0.0.0.0` |
-| `FRONTEND_PORT` | Port to bind the server | `8080` |
-| `FRONTEND_GITHUB_WEBHOOK_SECRET` | GitHub webhook secret for signature validation | (empty) |
-| `FRONTEND_AZURE_STORAGE_CONNECTION_STRING` | Azure Storage connection string | (required) |
-| `FRONTEND_AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
+| `HOST` | Host to bind the server | `0.0.0.0` |
+| `PORT` | Port to bind the server | `8080` |
+| `GITHUB_WEBHOOK_SECRET` | GitHub webhook secret for signature validation | (empty) |
+| `AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
+| `AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
 
 ### Backend Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BACKEND_AZURE_STORAGE_CONNECTION_STRING` | Azure Storage connection string | (required) |
+| `BACKEND_AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
 | `BACKEND_AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
 | `BACKEND_APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | (optional) |
 | `BACKEND_POLL_INTERVAL_SECONDS` | Queue polling interval | `5` |
@@ -89,8 +89,8 @@ pip install -e ".[dev]"
 
 ```bash
 # Set environment variables
-export FRONTEND_AZURE_STORAGE_CONNECTION_STRING="your-connection-string"
-export FRONTEND_GITHUB_WEBHOOK_SECRET="your-webhook-secret"
+export AZURE_STORAGE_ACCOUNT_NAME="your-account-name"
+export GITHUB_WEBHOOK_SECRET="your-webhook-secret"
 
 # Run the frontend
 python -m uvicorn src.frontend.app:app --host 0.0.0.0 --port 8080
@@ -100,8 +100,8 @@ python -m uvicorn src.frontend.app:app --host 0.0.0.0 --port 8080
 
 ```bash
 # Set environment variables
-export BACKEND_AZURE_STORAGE_CONNECTION_STRING="your-connection-string"
-export BACKEND_APPLICATIONINSIGHTS_CONNECTION_STRING="your-appinsights-connection-string"
+export AZURE_STORAGE_ACCOUNT_NAME="your-account-name"
+export APPLICATIONINSIGHTS_CONNECTION_STRING="your-appinsights-connection-string"
 
 # Run the backend
 python -m src.backend.app
@@ -124,15 +124,15 @@ docker build -f src/backend/Dockerfile -t github-telemetry-backend .
 ```bash
 # Run frontend
 docker run -d \
-  -e FRONTEND_AZURE_STORAGE_CONNECTION_STRING="..." \
-  -e FRONTEND_GITHUB_WEBHOOK_SECRET="..." \
+  -e AZURE_STORAGE_ACCOUNT_NAME="..." \
+  -e GITHUB_WEBHOOK_SECRET="..." \
   -p 8080:8080 \
   github-telemetry-frontend
 
 # Run backend
 docker run -d \
-  -e BACKEND_AZURE_STORAGE_CONNECTION_STRING="..." \
-  -e BACKEND_APPLICATIONINSIGHTS_CONNECTION_STRING="..." \
+  -e AZURE_STORAGE_ACCOUNT_NAME="..." \
+  -e APPLICATIONINSIGHTS_CONNECTION_STRING="..." \
   github-telemetry-backend
 ```
 

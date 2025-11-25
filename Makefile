@@ -1,5 +1,16 @@
 .PHONY: help install install-dev lint format test test-cov build-frontend build-backend build run-frontend run-backend clean
 
+# Load environment file if exists
+ENV_FILE := .env
+ifeq ($(filter $(MAKECMDGOALS),config clean),)
+	ifneq ($(strip $(wildcard $(ENV_FILE))),)
+		ifneq ($(MAKECMDGOALS),config)
+			include $(ENV_FILE)
+			export
+		endif
+	endif
+endif
+
 # Default target
 help:
 	@echo "GitHub Telemetry - Development Commands"
@@ -58,10 +69,20 @@ test-cov:
 
 # Docker
 build-frontend:
-	docker build -f src/frontend/Dockerfile -t github-telemetry-frontend .
+	docker build -f src/frontend/Dockerfile -t gh-telemetry-frontend .
+
+publish-frontend: # to container registry
+	az acr login --name $(CONTAINER_REGISTRY)
+	docker build -f src/frontend/Dockerfile -t $(CONTAINER_REGISTRY)/gh-telemetry-frontend:latest .
+	docker push $(CONTAINER_REGISTRY)/gh-telemetry-frontend:latest
 
 build-backend:
-	docker build -f src/backend/Dockerfile -t github-telemetry-backend .
+	docker build -f src/backend/Dockerfile -t gh-telemetry-backend .
+
+publish-backend: # to container registry
+	az acr login --name $(CONTAINER_REGISTRY)
+	docker build -f src/backend/Dockerfile -t $(CONTAINER_REGISTRY)/gh-telemetry-backend:latest .
+	docker push $(CONTAINER_REGISTRY)/gh-telemetry-backend:latest
 
 build: build-frontend build-backend
 

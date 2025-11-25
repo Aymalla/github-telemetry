@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from azure.core.exceptions import AzureError
+from azure.identity import DefaultAzureCredential
 from azure.storage.queue import QueueClient
 from azure.storage.queue import QueueMessage as AzureQueueMessage
 
@@ -17,15 +18,20 @@ logger = logging.getLogger(__name__)
 class QueueClientWrapper:
     """Wrapper for Azure Storage Queue operations."""
 
-    def __init__(self, connection_string: str, queue_name: str):
+    def __init__(self, account_name: str, queue_name: str):
         """Initialize the queue client.
 
         Args:
-            connection_string: Azure Storage connection string
+            account_name: Azure Storage account name
             queue_name: Name of the queue
         """
-        self._queue_client = QueueClient.from_connection_string(
-            connection_string, queue_name=queue_name
+        # Use the provided account name to construct the account URL for authentication
+        # via DefaultAzureCredential, rather than embedding secrets in a connection string.
+        account_url = f"https://{account_name}.queue.core.windows.net"
+        self._queue_client = QueueClient(
+            account_url=account_url,
+            queue_name=queue_name,
+            credential=DefaultAzureCredential(),
         )
         self._queue_name = queue_name
 
@@ -128,16 +134,16 @@ class QueueClientWrapper:
             return False
 
 
-def create_queue_client(connection_string: str, queue_name: str) -> QueueClientWrapper:
+def create_queue_client(account_name: str, queue_name: str) -> QueueClientWrapper:
     """Create a queue client wrapper.
 
     Args:
-        connection_string: Azure Storage connection string
+        account_name: Azure Storage account name
         queue_name: Name of the queue
 
     Returns:
         QueueClientWrapper instance
     """
-    client = QueueClientWrapper(connection_string, queue_name)
+    client = QueueClientWrapper(account_name, queue_name)
     client.ensure_queue_exists()
     return client
