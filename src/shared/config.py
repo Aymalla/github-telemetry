@@ -35,14 +35,16 @@ class FrontendSettings(BaseSettings):
     azure_storage_queue_name: str = "github-webhook-events"
 
     @model_validator(mode="before")
-    def _sanitize(self, values: dict) -> dict:  # type: ignore[override]
+    @classmethod
+    def _sanitize(cls, values: dict) -> dict:  # type: ignore[misc]
         # If port is a non-numeric placeholder string, drop it so default applies
-        port_val = values.get("port")
-        if isinstance(port_val, str):
-            try:
-                int(port_val.strip())
-            except (ValueError, TypeError):
-                values.pop("port", None)
+        if isinstance(values, dict):
+            port_val = values.get("port")
+            if isinstance(port_val, str):
+                try:
+                    int(port_val.strip())
+                except (ValueError, TypeError):
+                    values.pop("port", None)
         return values
 
 
