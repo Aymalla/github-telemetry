@@ -1,0 +1,190 @@
+# Test workflow to generate failure telemetry events
+# This workflow is designed to test the telemetry capture for failures
+name: Test Telemetry - Failures
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_job:
+        description: 'Which job should fail (step1, step2, step3, none)'
+        required: false
+        default: 'step2'
+  schedule:
+    # Run weekly on Sunday at midnight UTC
+    - cron: '0 0 * * 0'
+
+jobs:
+  expected-failure:
+    name: Expected Failure Job
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Step 1 - Setup (succeeds)
+        run: |
+          echo "Setting up..."
+          sleep 2
+          echo "Setup complete!"
+
+      - name: Step 2 - Process (fails)
+        run: |
+          echo "Processing..."
+          sleep 3
+          echo "Simulating failure..."
+          exit 1
+
+      - name: Step 3 - Cleanup (skipped due to failure)
+        run: |
+          echo "This step should be skipped"
+
+  recoverable-failure:
+    name: Recoverable Failure Job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Flaky step (may fail)
+        id: flaky
+        continue-on-error: true
+        run: |
+          echo "Running flaky operation..."
+          sleep 2
+          # Simulate 50% failure rate based on minute
+          if [ $(($(date +%M) % 2)) -eq 0 ]; then
+            echo "Flaky step succeeded!"
+          else
+            echo "Flaky step failed!"
+            exit 1
+          fi
+
+      - name: Recovery step
+        if: steps.flaky.outcome == 'failure'
+        run: |
+          echo "Recovering from flaky step failure..."
+          sleep 3
+          echo "Recovery complete!"
+
+      - name: Continue processing
+        run: |
+          echo "Continuing with processing..."
+          sleep 2
+          echo "Processing complete!"
+
+  timeout-simulation:
+    name: Timeout Simulation Job
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Long running step
+        run: |
+          echo "Starting long running operation..."
+          # Sleep for 30 seconds (won't timeout, just simulates long operation)
+          sleep 30
+          echo "Long operation completed!"
+
+  conditional-failure:
+    name: Conditional Failure Job
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check conditions
+        id: check
+        run: |
+          echo "Checking conditions..."
+          # Fail on workflow_dispatch with specific input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            case "${{ github.event.inputs.fail_job }}" in
+              "step1")
+                echo "Failing at step 1!"
+                exit 1
+                ;;
+              *)
+                echo "Conditions passed at step 1"
+                ;;
+            esac
+          fi
+
+      - name: Process data
+        run: |
+          echo "Processing data..."
+          sleep 3
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.fail_job }}" == "step2" ]; then
+            echo "Failing at step 2!"
+            exit 1
+          fi
+          echo "Data processed!"
+
+      - name: Finalize
+        run: |
+          echo "Finalizing..."
+          sleep 2
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.fail_job }}" == "step3" ]; then
+            echo "Failing at step 3!"
+            exit 1
+          fi
+          echo "Finalized!"
+
+  multi-step-failure-analysis:
+    name: Multi-Step Analysis Job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Step 1 - Initialize
+        run: |
+          echo "Initializing..."
+          sleep 1
+          echo "Initialized!"
+
+      - name: Step 2 - Validate
+        run: |
+          echo "Validating..."
+          sleep 2
+          echo "Validated!"
+
+      - name: Step 3 - Transform
+        run: |
+          echo "Transforming..."
+          sleep 3
+          echo "Transformed!"
+
+      - name: Step 4 - Load
+        run: |
+          echo "Loading..."
+          sleep 2
+          echo "Loaded!"
+
+      - name: Step 5 - Verify
+        run: |
+          echo "Verifying..."
+          sleep 1
+          echo "Verified!"
+
+  summary:
+    name: Failure Test Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [expected-failure, recoverable-failure, timeout-simulation, conditional-failure, multi-step-failure-analysis]
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Failure Telemetry Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Expected Failure | ${{ needs.expected-failure.result }} | Tests step failure telemetry |" >> $GITHUB_STEP_SUMMARY
+          echo "| Recoverable Failure | ${{ needs.recoverable-failure.result }} | Tests continue-on-error handling |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timeout Simulation | ${{ needs.timeout-simulation.result }} | Tests long-running operations |" >> $GITHUB_STEP_SUMMARY
+          echo "| Conditional Failure | ${{ needs.conditional-failure.result }} | Tests parameterized failures |" >> $GITHUB_STEP_SUMMARY
+          echo "| Multi-Step Analysis | ${{ needs.multi-step-failure-analysis.result }} | Tests multi-step metrics |" >> $GITHUB_STEP_SUMMARY
