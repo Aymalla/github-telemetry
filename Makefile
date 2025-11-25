@@ -58,10 +58,10 @@ test-cov:
 
 # Docker
 build-frontend:
-	docker build -f Dockerfile.frontend -t github-telemetry-frontend .
+	docker build -f src/frontend/Dockerfile -t github-telemetry-frontend .
 
 build-backend:
-	docker build -f Dockerfile.backend -t github-telemetry-backend .
+	docker build -f src/backend/Dockerfile -t github-telemetry-backend .
 
 build: build-frontend build-backend
 
