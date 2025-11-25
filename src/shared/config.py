@@ -5,6 +5,8 @@ appear in certain development or CI environments. Unknown environment variables
 are ignored and obviously non-numeric port values fall back to the default.
 """
 
+from typing import Any
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,7 +37,7 @@ class FrontendSettings(BaseSettings):
     azure_storage_queue_name: str = "github-webhook-events"
 
     @model_validator(mode="before")
-    def _sanitize(cls, values: dict) -> dict:  # type: ignore[override]
+    def _sanitize(cls, values: dict[str, Any]) -> dict[str, Any]:
         # If port is a non-numeric placeholder string, drop it so default applies
         port_val = values.get("port")
         if isinstance(port_val, str) and not port_val.strip().isdigit():
