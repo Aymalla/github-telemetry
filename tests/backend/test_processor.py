@@ -168,9 +168,15 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Verify telemetry was sent
+        # Verify telemetry was sent - find the WorkflowJob event specifically
         assert mock_telemetry.track_workflow_event.called
-        call_args = mock_telemetry.track_workflow_event.call_args
+        job_calls = [
+            call
+            for call in mock_telemetry.track_workflow_event.call_args_list
+            if call.kwargs.get("name") == "WorkflowJob"
+        ]
+        assert len(job_calls) == 1
+        call_args = job_calls[0]
         assert call_args.kwargs["name"] == "WorkflowJob"
         assert call_args.kwargs["properties"]["job_name"] == "build"
         assert call_args.kwargs["properties"]["status"] == "completed"
@@ -185,7 +191,22 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Find step duration metric calls
+        # Find step workflow event calls
+        step_event_calls = [
+            call
+            for call in mock_telemetry.track_workflow_event.call_args_list
+            if call.kwargs.get("name") == "WorkflowStep"
+        ]
+        # Should have 2 step events (Checkout and Build)
+        assert len(step_event_calls) == 2
+
+        # Verify hierarchical properties in step events
+        first_step = step_event_calls[0].kwargs
+        assert first_step["properties"]["job_id"] == "789012"
+        assert first_step["properties"]["workflow_run_id"] == "123456"
+        assert first_step["properties"]["step_name"] == "Checkout"
+
+        # Find step duration metric calls (still tracked for aggregation)
         step_metric_calls = [
             call
             for call in mock_telemetry.track_metric.call_args_list
@@ -193,6 +214,11 @@ class TestEventProcessor:
         ]
         # Should have 2 step metrics (Checkout and Build)
         assert len(step_metric_calls) == 2
+
+        # Verify hierarchical properties in metrics too
+        first_metric = step_metric_calls[0].kwargs
+        assert first_metric["properties"]["job_id"] == "789012"
+        assert first_metric["properties"]["workflow_run_id"] == "123456"
 
     def test_process_unknown_event(
         self, processor: EventProcessor, mock_telemetry: MagicMock
@@ -263,3 +289,44 @@ class TestEventProcessor:
             if call.kwargs.get("name") == "workflow_duration_seconds"
         ]
         assert len(duration_calls) == 0
+
+    def test_hierarchical_chain_complete(
+        self,
+        processor: EventProcessor,
+        workflow_job_message: QueueMessage,
+        mock_telemetry: MagicMock,
+    ) -> None:
+        """Test that the complete hierarchical chain is established for workflow -> job -> steps."""
+        result = processor.process_message(workflow_job_message)
+        assert result is True
+
+        # Get all workflow event calls
+        event_calls = mock_telemetry.track_workflow_event.call_args_list
+
+        # Find the WorkflowJob event
+        job_event = next(call for call in event_calls if call.kwargs.get("name") == "WorkflowJob")
+        job_props = job_event.kwargs["properties"]
+
+        # Verify job has workflow_run_id (parent reference)
+        assert "workflow_run_id" in job_props
+        assert job_props["workflow_run_id"] == "123456"
+        assert job_props["job_id"] == "789012"
+
+        # Find WorkflowStep events
+        step_events = [call for call in event_calls if call.kwargs.get("name") == "WorkflowStep"]
+        assert len(step_events) == 2
+
+        # Verify each step has job_id and workflow_run_id (parent references)
+        for step_event in step_events:
+            step_props = step_event.kwargs["properties"]
+            assert "job_id" in step_props
+            assert step_props["job_id"] == "789012"
+            assert "workflow_run_id" in step_props
+            assert step_props["workflow_run_id"] == "123456"
+            assert "step_name" in step_props
+            assert "step_number" in step_props
+
+        # Verify the chain: workflow_run -> job -> steps
+        # Steps reference their parent job, and job references its parent workflow run
+        assert step_events[0].kwargs["properties"]["job_id"] == job_props["job_id"]
+        assert job_props["workflow_run_id"] == "123456"

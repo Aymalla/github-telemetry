@@ -199,6 +199,11 @@ Receives GitHub webhook events.
 
 ## Telemetry Data
 
+The telemetry data is structured in a hierarchical chain:
+- **Workflow Run** (parent) → **Jobs** (children) → **Steps** (children of jobs)
+
+Each level includes parent identifiers to establish the hierarchy, enabling you to trace metrics from workflow runs down to individual steps.
+
 ### Workflow Run Events
 
 ```json
@@ -220,12 +225,15 @@ Receives GitHub webhook events.
 
 ### Workflow Job Events
 
+Jobs include `workflow_run_id` to link them to their parent workflow run.
+
 ```json
 {
   "name": "WorkflowJob",
   "properties": {
     "job_id": "789012",
     "job_name": "build",
+    "workflow_run_id": "123456",
     "workflow_name": "CI",
     "repository_full_name": "owner/repo",
     "runner_name": "runner-1",
@@ -233,6 +241,30 @@ Receives GitHub webhook events.
   },
   "measurements": {
     "duration_seconds": 360.0
+  }
+}
+```
+
+### Workflow Step Events
+
+Steps include both `job_id` and `workflow_run_id` to link them to their parent job and workflow run.
+
+```json
+{
+  "name": "WorkflowStep",
+  "properties": {
+    "step_name": "Build",
+    "step_number": "2",
+    "step_status": "completed",
+    "step_conclusion": "success",
+    "job_id": "789012",
+    "job_name": "build",
+    "workflow_run_id": "123456",
+    "workflow_name": "CI",
+    "repository_full_name": "owner/repo"
+  },
+  "measurements": {
+    "duration_seconds": 120.0
   }
 }
 ```

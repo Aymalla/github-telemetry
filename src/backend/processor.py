@@ -268,13 +268,42 @@ class EventProcessor:
         for step in metrics.steps:
             if step.started_at and step.completed_at:
                 step_duration = (step.completed_at - step.started_at).total_seconds()
+
+                # Send step as a workflow event to establish hierarchy
+                step_properties = {
+                    "step_name": step.name,
+                    "step_number": str(step.number),
+                    "step_status": step.status,
+                    "step_conclusion": step.conclusion or "",
+                    "job_id": str(metrics.job_id),
+                    "job_name": metrics.job_name,
+                    "workflow_run_id": str(metrics.workflow_run_id),
+                    "workflow_name": metrics.workflow_name,
+                    "repository_id": str(metrics.repository_id),
+                    "repository_name": metrics.repository_name,
+                    "repository_full_name": metrics.repository_full_name,
+                }
+
+                step_measurements = {
+                    "duration_seconds": step_duration,
+                }
+
+                self._telemetry.track_workflow_event(
+                    name="WorkflowStep",
+                    properties=step_properties,
+                    measurements=step_measurements,
+                )
+
+                # Also track as a metric for aggregation
                 self._telemetry.track_metric(
                     name="step_duration_seconds",
                     value=step_duration,
                     properties={
                         "step_name": step.name,
                         "step_number": str(step.number),
+                        "job_id": str(metrics.job_id),
                         "job_name": metrics.job_name,
+                        "workflow_run_id": str(metrics.workflow_run_id),
                         "workflow_name": metrics.workflow_name,
                         "repository_full_name": metrics.repository_full_name,
                         "conclusion": step.conclusion or "",
