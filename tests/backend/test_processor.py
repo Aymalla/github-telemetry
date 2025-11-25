@@ -304,7 +304,9 @@ class TestEventProcessor:
         event_calls = mock_telemetry.track_workflow_event.call_args_list
 
         # Find the WorkflowJob event
-        job_event = next(call for call in event_calls if call.kwargs.get("name") == "WorkflowJob")
+        job_events = [call for call in event_calls if call.kwargs.get("name") == "WorkflowJob"]
+        assert len(job_events) == 1, "Expected exactly one WorkflowJob event"
+        job_event = job_events[0]
         job_props = job_event.kwargs["properties"]
 
         # Verify job has workflow_run_id (parent reference)
