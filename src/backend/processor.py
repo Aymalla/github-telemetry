@@ -292,7 +292,7 @@ class EventProcessor:
                     measurements=step_measurements,
                 )
 
-                # End the step span
+                # End the step span immediately after creation (step lifecycle complete)
                 self._telemetry.end_span(step_span)
 
                 # Also track as a metric for backward compatibility and easier aggregation.
@@ -313,10 +313,8 @@ class EventProcessor:
                     },
                 )
 
-        # End the job span
+        # End spans in reverse order: job then workflow (parent spans outlive children)
         self._telemetry.end_span(job_span)
-
-        # End the workflow span
         self._telemetry.end_span(workflow_span)
 
         # Track duration as a separate metric for aggregation

@@ -177,7 +177,11 @@ class TelemetryClient:
         """
         if span:
             span.finish()
-            if self._tracer:
+            # Use the span's own context_tracer exporter to ensure correct export
+            if hasattr(span, "context_tracer") and hasattr(span.context_tracer, "exporter"):
+                span.context_tracer.exporter.export([span])
+            elif self._tracer:
+                # Fallback to default tracer exporter
                 self._tracer.exporter.export([span])
 
     def _generate_trace_id(self, workflow_run_id: str) -> str:
