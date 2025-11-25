@@ -294,7 +294,9 @@ class EventProcessor:
                     measurements=step_measurements,
                 )
 
-                # Also track as a metric for aggregation
+                # Also track as a metric for backward compatibility and easier aggregation.
+                # Metrics are better suited for statistical analysis (avg, sum, percentiles)
+                # while events provide the full hierarchical context.
                 self._telemetry.track_metric(
                     name="step_duration_seconds",
                     value=step_duration,
