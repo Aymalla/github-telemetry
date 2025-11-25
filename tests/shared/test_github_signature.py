@@ -1,19 +1,7 @@
 """Tests for GitHub signature validation."""
 
-import hashlib
-import hmac
-
 from src.shared.github_signature import validate_github_signature
-
-
-def compute_signature(payload: bytes, secret: str) -> str:
-    """Compute a valid GitHub signature for testing."""
-    signature = hmac.new(
-        key=secret.encode("utf-8"),
-        msg=payload,
-        digestmod=hashlib.sha256,
-    ).hexdigest()
-    return f"sha256={signature}"
+from tests.conftest import compute_signature
 
 
 class TestValidateGitHubSignature:
