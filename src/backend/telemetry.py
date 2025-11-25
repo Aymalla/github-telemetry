@@ -1,5 +1,6 @@
 """Azure Application Insights telemetry client."""
 
+import hashlib
 import logging
 from typing import Any
 
@@ -80,11 +81,20 @@ class TelemetryClient:
 
         if self._tracer:
             # Create a span context with workflow_run_id as the trace_id
-            # This ensures all related spans share the same operation_id
-            span_context = SpanContext(trace_id=self._generate_trace_id(workflow_run_id))
-            span = self._tracer.start_span(name=name)
+            # This ensures all related spans share the same operation_id in Application Insights
+            trace_id = self._generate_trace_id(workflow_run_id)
+            span_context = SpanContext(trace_id=trace_id)
+
+            # Create a new tracer with the custom span context for this workflow
+            exporter = AzureExporter(connection_string=self._connection_string)
+            workflow_tracer = Tracer(
+                span_context=span_context,
+                exporter=exporter,
+                sampler=AlwaysOnSampler(),
+            )
+
+            span = workflow_tracer.start_span(name=name)
             span.span_kind = SpanKind.SERVER
-            span.context_tracer.span_context = span_context
 
             for key, value in properties.items():
                 span.add_attribute(key, str(value))
@@ -179,8 +189,6 @@ class TelemetryClient:
         Returns:
             32-character hex trace ID
         """
-        import hashlib
-
         # Generate a consistent 32-character hex string from workflow_run_id
         hash_obj = hashlib.sha256(str(workflow_run_id).encode())
         return hash_obj.hexdigest()[:32]

@@ -246,10 +246,11 @@ class EventProcessor:
             measurements["duration_seconds"] = metrics.duration_seconds
 
         # Create a workflow span as parent
+        workflow_run_id_str = str(metrics.workflow_run_id)
         workflow_span = self._telemetry.start_workflow_span(
-            name=f"WorkflowRun {metrics.workflow_run_id}",
-            workflow_run_id=str(metrics.workflow_run_id),
-            properties={"workflow_run_id": str(metrics.workflow_run_id)},
+            name=f"WorkflowRun {workflow_run_id_str}",
+            workflow_run_id=workflow_run_id_str,
+            properties={"workflow_run_id": workflow_run_id_str},
         )
 
         # Create job span as child of workflow
