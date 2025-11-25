@@ -199,10 +199,15 @@ Receives GitHub webhook events.
 
 ## Telemetry Data
 
-The telemetry data is structured in a hierarchical chain:
-- **Workflow Run** (parent) → **Jobs** (children) → **Steps** (children of jobs)
+The telemetry data is structured in a **hierarchical parent-child relationship** using OpenCensus distributed tracing:
+- **Workflow Run** (parent span) → **Jobs** (child spans) → **Steps** (grandchild spans)
 
-Each level includes parent identifiers to establish the hierarchy, enabling you to trace metrics from workflow runs down to individual steps.
+This creates a proper transaction tree in Application Insights that shows:
+- The workflow run as the root operation with a unique `operation_id` (derived from `workflow_run_id`)
+- Jobs as child operations under the workflow run
+- Steps as child operations under each job
+
+Each span includes parent identifiers and is linked through the OpenCensus span context, enabling full traceability in the Application Insights End-to-End Transaction view.
 
 ### Workflow Run Events
 

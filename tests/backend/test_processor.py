@@ -168,18 +168,28 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Verify telemetry was sent - find the WorkflowJob event specifically
-        assert mock_telemetry.track_workflow_event.called
-        job_calls = [
+        # Verify hierarchical spans were created
+        assert mock_telemetry.start_workflow_span.called
+        assert mock_telemetry.start_child_span.called
+        assert mock_telemetry.end_span.called
+
+        # Verify workflow span was created with workflow_run_id
+        workflow_span_call = mock_telemetry.start_workflow_span.call_args
+        assert (
+            "123456" in workflow_span_call.kwargs["name"]
+            or workflow_span_call.kwargs["workflow_run_id"] == "123456"
+        )
+
+        # Verify job child span was created with correct properties
+        job_span_calls = [
             call
-            for call in mock_telemetry.track_workflow_event.call_args_list
-            if call.kwargs.get("name") == "WorkflowJob"
+            for call in mock_telemetry.start_child_span.call_args_list
+            if "WorkflowJob" in call.kwargs.get("name", "")
         ]
-        assert len(job_calls) == 1
-        call_args = job_calls[0]
-        assert call_args.kwargs["name"] == "WorkflowJob"
-        assert call_args.kwargs["properties"]["job_name"] == "build"
-        assert call_args.kwargs["properties"]["status"] == "completed"
+        assert len(job_span_calls) >= 1
+        job_call = job_span_calls[0]
+        assert job_call.kwargs["properties"]["job_name"] == "build"
+        assert job_call.kwargs["properties"]["status"] == "completed"
 
     def test_process_workflow_job_tracks_step_metrics(
         self,
@@ -191,17 +201,17 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Find step workflow event calls
-        step_event_calls = [
+        # Find step child span calls
+        step_span_calls = [
             call
-            for call in mock_telemetry.track_workflow_event.call_args_list
-            if call.kwargs.get("name") == "WorkflowStep"
+            for call in mock_telemetry.start_child_span.call_args_list
+            if "WorkflowStep" in call.kwargs.get("name", "")
         ]
-        # Should have 2 step events (Checkout and Build)
-        assert len(step_event_calls) == 2
+        # Should have 2 step spans (Checkout and Build)
+        assert len(step_span_calls) == 2
 
-        # Verify hierarchical properties in step events
-        first_step = step_event_calls[0].kwargs
+        # Verify hierarchical properties in step spans
+        first_step = step_span_calls[0].kwargs
         assert first_step["properties"]["job_id"] == "789012"
         assert first_step["properties"]["workflow_run_id"] == "123456"
         assert first_step["properties"]["step_name"] == "Checkout"
@@ -300,27 +310,36 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Get all workflow event calls
-        event_calls = mock_telemetry.track_workflow_event.call_args_list
+        # Verify workflow span was created (parent)
+        assert mock_telemetry.start_workflow_span.called
+        workflow_span_call = mock_telemetry.start_workflow_span.call_args
+        assert workflow_span_call.kwargs["workflow_run_id"] == "123456"
 
-        # Find the WorkflowJob event
-        job_events = [call for call in event_calls if call.kwargs.get("name") == "WorkflowJob"]
-        assert len(job_events) == 1, "Expected exactly one WorkflowJob event"
-        job_event = job_events[0]
-        job_props = job_event.kwargs["properties"]
+        # Get all child span calls
+        child_span_calls = mock_telemetry.start_child_span.call_args_list
+
+        # Find the WorkflowJob child span
+        job_spans = [
+            call for call in child_span_calls if "WorkflowJob" in call.kwargs.get("name", "")
+        ]
+        assert len(job_spans) == 1, "Expected exactly one WorkflowJob span"
+        job_span = job_spans[0]
+        job_props = job_span.kwargs["properties"]
 
         # Verify job has workflow_run_id (parent reference)
         assert "workflow_run_id" in job_props
         assert job_props["workflow_run_id"] == "123456"
         assert job_props["job_id"] == "789012"
 
-        # Find WorkflowStep events
-        step_events = [call for call in event_calls if call.kwargs.get("name") == "WorkflowStep"]
-        assert len(step_events) == 2
+        # Find WorkflowStep child spans
+        step_spans = [
+            call for call in child_span_calls if "WorkflowStep" in call.kwargs.get("name", "")
+        ]
+        assert len(step_spans) == 2
 
         # Verify each step has job_id and workflow_run_id (parent references)
-        for step_event in step_events:
-            step_props = step_event.kwargs["properties"]
+        for step_span in step_spans:
+            step_props = step_span.kwargs["properties"]
             assert "job_id" in step_props
             assert step_props["job_id"] == "789012"
             assert "workflow_run_id" in step_props
@@ -330,5 +349,5 @@ class TestEventProcessor:
 
         # Verify the chain: workflow_run -> job -> steps
         # Steps reference their parent job, and job references its parent workflow run
-        assert step_events[0].kwargs["properties"]["job_id"] == job_props["job_id"]
+        assert step_spans[0].kwargs["properties"]["job_id"] == job_props["job_id"]
         assert job_props["workflow_run_id"] == "123456"

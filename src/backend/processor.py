@@ -220,7 +220,7 @@ class EventProcessor:
             )
 
     def _send_job_telemetry(self, metrics: JobMetrics) -> None:
-        """Send job metrics to Application Insights.
+        """Send job metrics to Application Insights with proper hierarchy.
 
         Args:
             metrics: Job metrics to send
@@ -245,31 +245,27 @@ class EventProcessor:
         if metrics.duration_seconds is not None:
             measurements["duration_seconds"] = metrics.duration_seconds
 
-        self._telemetry.track_workflow_event(
-            name="WorkflowJob",
+        # Create a workflow span as parent
+        workflow_span = self._telemetry.start_workflow_span(
+            name=f"WorkflowRun {metrics.workflow_run_id}",
+            workflow_run_id=str(metrics.workflow_run_id),
+            properties={"workflow_run_id": str(metrics.workflow_run_id)},
+        )
+
+        # Create job span as child of workflow
+        job_span = self._telemetry.start_child_span(
+            name=f"WorkflowJob: {metrics.job_name}",
+            parent_span=workflow_span,
             properties=properties,
             measurements=measurements,
         )
-
-        # Track duration as a separate metric for aggregation
-        if metrics.duration_seconds is not None:
-            self._telemetry.track_metric(
-                name="job_duration_seconds",
-                value=metrics.duration_seconds,
-                properties={
-                    "job_name": metrics.job_name,
-                    "workflow_name": metrics.workflow_name,
-                    "repository_full_name": metrics.repository_full_name,
-                    "conclusion": metrics.conclusion or "",
-                },
-            )
 
         # Track step metrics for completed jobs
         for step in metrics.steps:
             if step.started_at and step.completed_at:
                 step_duration = (step.completed_at - step.started_at).total_seconds()
 
-                # Send step as a workflow event to establish hierarchy
+                # Send step as a child span of the job
                 step_properties = {
                     "step_name": step.name,
                     "step_number": str(step.number),
@@ -288,11 +284,15 @@ class EventProcessor:
                     "duration_seconds": step_duration,
                 }
 
-                self._telemetry.track_workflow_event(
-                    name="WorkflowStep",
+                step_span = self._telemetry.start_child_span(
+                    name=f"WorkflowStep: {step.name}",
+                    parent_span=job_span,
                     properties=step_properties,
                     measurements=step_measurements,
                 )
+
+                # End the step span
+                self._telemetry.end_span(step_span)
 
                 # Also track as a metric for backward compatibility and easier aggregation.
                 # Metrics are better suited for statistical analysis (avg, sum, percentiles)
@@ -311,3 +311,22 @@ class EventProcessor:
                         "conclusion": step.conclusion or "",
                     },
                 )
+
+        # End the job span
+        self._telemetry.end_span(job_span)
+
+        # End the workflow span
+        self._telemetry.end_span(workflow_span)
+
+        # Track duration as a separate metric for aggregation
+        if metrics.duration_seconds is not None:
+            self._telemetry.track_metric(
+                name="job_duration_seconds",
+                value=metrics.duration_seconds,
+                properties={
+                    "job_name": metrics.job_name,
+                    "workflow_name": metrics.workflow_name,
+                    "repository_full_name": metrics.repository_full_name,
+                    "conclusion": metrics.conclusion or "",
+                },
+            )
