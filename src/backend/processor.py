@@ -136,7 +136,7 @@ class EventProcessor:
                 duration = job.completed_at - job.started_at
                 duration_seconds = duration.total_seconds()
 
-            # Create metrics (steps are now automatically parsed by Pydantic)
+            # Create metrics using parsed data from the validated model
             metrics = JobMetrics(
                 job_id=job.id,
                 job_name=job.name,

@@ -93,7 +93,10 @@ class WorkflowJob(BaseModel):
     runner_name: str | None = None
     runner_group_name: str | None = None
     labels: list[str] = Field(default_factory=list)
-    steps: list[Step] = Field(default_factory=list)
+    steps: list[Step] = Field(
+        default_factory=list,
+        description="List of job steps with their execution status and timing",
+    )
 
 
 class WorkflowRunEvent(BaseModel):
