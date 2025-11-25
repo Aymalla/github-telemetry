@@ -7,7 +7,6 @@ from typing import Any
 from src.shared.models import (
     JobMetrics,
     QueueMessage,
-    Step,
     WorkflowJobEvent,
     WorkflowMetrics,
     WorkflowRunEvent,
@@ -137,16 +136,7 @@ class EventProcessor:
                 duration = job.completed_at - job.started_at
                 duration_seconds = duration.total_seconds()
 
-            # Parse steps from payload
-            steps: list[Step] = []
-            raw_steps = payload.get("workflow_job", {}).get("steps", [])
-            for step_data in raw_steps:
-                try:
-                    steps.append(Step.model_validate(step_data))
-                except Exception:
-                    pass
-
-            # Create metrics
+            # Create metrics (steps are now automatically parsed by Pydantic)
             metrics = JobMetrics(
                 job_id=job.id,
                 job_name=job.name,
@@ -166,7 +156,7 @@ class EventProcessor:
                 event_type=message.event_type,
                 action=event.action,
                 processed_at=datetime.now(UTC),
-                steps=steps,
+                steps=job.steps,
             )
 
             # Send telemetry

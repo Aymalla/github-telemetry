@@ -67,6 +67,17 @@ class WorkflowRun(BaseModel):
     html_url: str = ""
 
 
+class Step(BaseModel):
+    """GitHub workflow step information."""
+
+    name: str
+    status: str
+    conclusion: str | None = None
+    number: int
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
 class WorkflowJob(BaseModel):
     """GitHub workflow job information."""
 
@@ -82,17 +93,7 @@ class WorkflowJob(BaseModel):
     runner_name: str | None = None
     runner_group_name: str | None = None
     labels: list[str] = Field(default_factory=list)
-
-
-class Step(BaseModel):
-    """GitHub workflow step information."""
-
-    name: str
-    status: str
-    conclusion: str | None = None
-    number: int
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
+    steps: list[Step] = Field(default_factory=list)
 
 
 class WorkflowRunEvent(BaseModel):
