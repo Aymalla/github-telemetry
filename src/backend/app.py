@@ -6,9 +6,9 @@ import time
 from types import FrameType
 
 from src.backend.processor import EventProcessor
+from src.backend.telemetry import create_telemetry_client
 from src.shared.config import BackendSettings
 from src.shared.queue_client import create_queue_client
-from src.shared.telemetry import create_telemetry_client
 
 # Configure logging
 logging.basicConfig(
@@ -30,7 +30,7 @@ class BackendService:
         self._settings = settings
         self._running = False
         self._queue_client = create_queue_client(
-            settings.azure_storage_connection_string,
+            settings.azure_storage_account_name,
             settings.azure_storage_queue_name,
         )
         self._telemetry_client = create_telemetry_client(
@@ -111,7 +111,7 @@ def main() -> None:
     """Main entry point for the backend service."""
     settings = BackendSettings()
 
-    if not settings.azure_storage_connection_string:
+    if not settings.azure_storage_account_name:
         logger.error("Azure Storage connection string is required")
         return
 

@@ -11,7 +11,7 @@ from src.shared.models import (
     WorkflowMetrics,
     WorkflowRunEvent,
 )
-from src.shared.telemetry import TelemetryClient
+from src.backend.telemetry import TelemetryClient
 
 logger = logging.getLogger(__name__)
 

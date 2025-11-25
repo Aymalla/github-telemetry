@@ -9,7 +9,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from src.shared.config import FrontendSettings
-from src.shared.github_signature import validate_github_signature
+from src.frontend.github_signature import validate_github_signature
 from src.shared.queue_client import QueueClientWrapper, create_queue_client
 
 # Configure logging
@@ -31,16 +31,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("Starting webhook frontend service")
 
-    # Initialize queue client if connection string is provided
-    if settings.azure_storage_connection_string:
+    # Initialize queue client if account name is provided
+    if settings.azure_storage_account_name:
         queue_client = create_queue_client(
-            settings.azure_storage_connection_string,
+            settings.azure_storage_account_name,
             settings.azure_storage_queue_name,
         )
         logger.info("Queue client initialized")
     else:
         logger.warning(
-            "No Azure Storage connection string provided. Events will be logged but not queued."
+            "No Azure Storage account name provided. Events will be logged but not queued."
         )
 
     yield

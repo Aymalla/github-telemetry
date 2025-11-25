@@ -7,7 +7,7 @@ import pytest
 
 from src.backend.processor import EventProcessor
 from src.shared.models import QueueMessage
-from src.shared.telemetry import TelemetryClient
+from src.backend.telemetry import TelemetryClient
 
 
 @pytest.fixture
