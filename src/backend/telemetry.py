@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from opencensus.ext.azure.log_exporter import AzureLogHandler
+from opencensus.ext.azure.metrics_exporter import MetricsExporter
 from opencensus.ext.azure.trace_exporter import AzureExporter
 from opencensus.trace import execution_context
 from opencensus.trace.samplers import AlwaysOnSampler
@@ -25,6 +26,7 @@ class TelemetryClient:
         self._connection_string = connection_string
         self._tracer: Tracer | None = None
         self._logger: logging.Logger | None = None
+        self._metrics_exporter = None
 
         if connection_string:
             self._setup_telemetry()
@@ -53,6 +55,8 @@ class TelemetryClient:
                 azure_handler = AzureLogHandler(connection_string=self._connection_string)
                 self._logger.addHandler(azure_handler)
 
+            # Set up metrics exporter
+            self._metrics_exporter = MetricsExporter(connection_string=self._connection_string)
             logger.info("Application Insights telemetry initialized")
         except Exception as e:
             logger.error("Failed to initialize Application Insights: %s", str(e))
@@ -98,7 +102,7 @@ class TelemetryClient:
         value: float,
         properties: dict[str, Any] | None = None,
     ) -> None:
-        """Track a metric.
+        """Track a metric and export to Application Insights CustomMetrics table.
 
         Args:
             name: Metric name
@@ -107,15 +111,17 @@ class TelemetryClient:
         """
         properties = properties or {}
 
-        if self._logger:
-            self._logger.info(
-                "Metric: %s = %s",
-                name,
-                value,
-                extra={"custom_dimensions": {"metric_name": name, "value": value, **properties}},
+        # Export to Application Insights CustomMetrics table
+        if self._metrics_exporter:
+            self._metrics_exporter.export_metrics(
+                [
+                    {
+                        "name": name,
+                        "value": value,
+                        "properties": properties,
+                    }
+                ]
             )
-        else:
-            logger.info("Metric: %s = %s, Properties: %s", name, value, properties)
 
     def flush(self) -> None:
         """Flush any pending telemetry."""

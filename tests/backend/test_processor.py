@@ -79,6 +79,7 @@ def workflow_job_message() -> QueueMessage:
                 "workflow_name": "CI",
                 "status": "completed",
                 "conclusion": "success",
+                "created_at": "2024-01-01T00:02:00Z",
                 "started_at": "2024-01-01T00:02:00Z",
                 "completed_at": "2024-01-01T00:08:00Z",
                 "html_url": "https://github.com/owner/repo/actions/runs/123456/jobs/789012",

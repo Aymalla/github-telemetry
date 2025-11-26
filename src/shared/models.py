@@ -87,6 +87,7 @@ class WorkflowJob(BaseModel):
     workflow_name: str = ""
     status: str
     conclusion: str | None = None
+    created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     html_url: str = ""
@@ -144,9 +145,11 @@ class WorkflowMetrics(BaseModel):
     # Timing
     status: str
     conclusion: str | None = None
+    created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_seconds: float | None = None
+    queue_duration_seconds: float | None = None
 
     # Context
     event_trigger: str = ""
@@ -177,9 +180,11 @@ class JobMetrics(BaseModel):
     # Timing
     status: str
     conclusion: str | None = None
+    created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_seconds: float | None = None
+    queue_duration_seconds: float | None = None
 
     # Runner info
     runner_name: str | None = None

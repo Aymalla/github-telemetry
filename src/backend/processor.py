@@ -72,9 +72,11 @@ class EventProcessor:
 
             # Calculate duration if completed
             duration_seconds: float | None = None
+            queue_duration_seconds: float | None = None
             if run.run_started_at and run.updated_at and run.status == "completed":
                 duration = run.updated_at - run.run_started_at
                 duration_seconds = duration.total_seconds()
+                queue_duration_seconds = (run.run_started_at - run.created_at).total_seconds()
 
             # Create metrics
             metrics = WorkflowMetrics(
@@ -88,9 +90,11 @@ class EventProcessor:
                 repository_full_name=event.repository.full_name,
                 status=run.status,
                 conclusion=run.conclusion,
+                created_at=run.created_at,
                 started_at=run.run_started_at,
                 completed_at=run.updated_at if run.status == "completed" else None,
                 duration_seconds=duration_seconds,
+                queue_duration_seconds=queue_duration_seconds,
                 event_trigger=run.event,
                 head_branch=run.head_branch,
                 head_sha=run.head_sha,
@@ -132,9 +136,11 @@ class EventProcessor:
 
             # Calculate duration if completed
             duration_seconds: float | None = None
+            queue_duration_seconds: float | None = None
             if job.started_at and job.completed_at:
                 duration = job.completed_at - job.started_at
                 duration_seconds = duration.total_seconds()
+                queue_duration_seconds = (job.started_at - job.created_at).total_seconds()
 
             # Create metrics using parsed data from the validated model
             metrics = JobMetrics(
@@ -150,6 +156,7 @@ class EventProcessor:
                 started_at=job.started_at,
                 completed_at=job.completed_at,
                 duration_seconds=duration_seconds,
+                queue_duration_seconds=queue_duration_seconds,
                 runner_name=job.runner_name,
                 runner_group_name=job.runner_group_name,
                 labels=job.labels,
@@ -212,11 +219,7 @@ class EventProcessor:
             self._telemetry.track_metric(
                 name="workflow_duration_seconds",
                 value=metrics.duration_seconds,
-                properties={
-                    "workflow_name": metrics.workflow_name,
-                    "repository_full_name": metrics.repository_full_name,
-                    "conclusion": metrics.conclusion or "",
-                },
+                properties=properties,
             )
 
     def _send_job_telemetry(self, metrics: JobMetrics) -> None:
@@ -256,12 +259,7 @@ class EventProcessor:
             self._telemetry.track_metric(
                 name="job_duration_seconds",
                 value=metrics.duration_seconds,
-                properties={
-                    "job_name": metrics.job_name,
-                    "workflow_name": metrics.workflow_name,
-                    "repository_full_name": metrics.repository_full_name,
-                    "conclusion": metrics.conclusion or "",
-                },
+                properties={**properties, "duration_seconds": str(metrics.duration_seconds)},
             )
 
         # Track step metrics for completed jobs
@@ -278,5 +276,8 @@ class EventProcessor:
                         "workflow_name": metrics.workflow_name,
                         "repository_full_name": metrics.repository_full_name,
                         "conclusion": step.conclusion or "",
+                        "started_at": step.started_at.isoformat(),
+                        "completed_at": step.completed_at.isoformat(),
+                        "duration_seconds": str(step_duration),
                     },
                 )
