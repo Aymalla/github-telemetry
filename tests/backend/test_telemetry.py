@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
-from src.backend.telemetry import TelemetryClient
 from src.shared.models import MetricValue
+from src.shared.telemetry import TelemetryClient
 
 
 class TestTelemetryClient:
