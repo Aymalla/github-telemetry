@@ -56,8 +56,7 @@ class BackendService:
             # Wait before next poll
             time.sleep(self._settings.poll_interval_seconds)
 
-        # Flush telemetry before shutdown
-        self._telemetry_client.flush()
+        # telemetry before shutdown
         logger.info("Backend service stopped")
 
     def stop(self) -> None:

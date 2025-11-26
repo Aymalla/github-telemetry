@@ -142,7 +142,9 @@ class MetricValue:
     values: list[float]
     timestamp: datetime
 
-    def __init__(self, name: str, value: float, timestamp: datetime, attributes: dict | None):
+    def __init__(
+        self, name: str, value: float, timestamp: datetime, attributes: dict[str, Any] | None
+    ):
         self.name = name
         self.timestamp = timestamp
         self.min_value = value

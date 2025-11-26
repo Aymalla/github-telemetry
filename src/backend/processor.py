@@ -73,7 +73,10 @@ class EventProcessor:
             if run.run_started_at and run.updated_at and run.status == "completed":
                 duration = run.updated_at - run.run_started_at
                 duration_seconds = duration.total_seconds()
-                queue_duration_seconds = (run.run_started_at - run.created_at).total_seconds()
+                queue_duration_seconds: float = 0
+                if run.created_at:
+                    queue_duration_seconds = (run.run_started_at - run.created_at).total_seconds()
+
                 completed_at: datetime = run.updated_at
 
                 # Send telemetry for the workflow run
@@ -140,12 +143,13 @@ class EventProcessor:
             job = event.workflow_job
 
             # Calculate duration if completed
-            duration_seconds: float | None = None
-            queue_duration_seconds: float | None = None
+            duration_seconds: float = 0
+            queue_duration_seconds: float = 0
             if job.started_at and job.completed_at:
                 duration = job.completed_at - job.started_at
                 duration_seconds = duration.total_seconds()
-                queue_duration_seconds = (job.started_at - job.created_at).total_seconds()
+                if job.created_at:
+                    queue_duration_seconds = (job.started_at - job.created_at).total_seconds()
 
                 # Create metrics using parsed data from the validated model
 
@@ -200,8 +204,8 @@ class EventProcessor:
                                     "completed_at": step.completed_at,
                                     "duration_seconds": str(step_duration),
                                     "run_id": str(job.run_id),
-                                    "job_id": str(job.id),
-                                    "job_name": job.name,
+                                    "parent_job_id": str(job.id),
+                                    "parent_job_name": job.name,
                                     "workflow_name": job.workflow_name,
                                     "repository_id": str(event.repository.id),
                                     "repository": event.repository.name,
