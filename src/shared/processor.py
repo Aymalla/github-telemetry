@@ -4,13 +4,13 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from src.backend.telemetry import TelemetryClient
 from src.shared.models import (
     MetricValue,
     QueueMessage,
     WorkflowJobEvent,
     WorkflowRunEvent,
 )
+from src.shared.telemetry import TelemetryClient
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,7 @@ class EventProcessor:
                                 "runner_group_name": run.runner_group_name or "",
                                 "labels": run.labels,
                                 "pool_name": self.get_mdp_name(run.labels),
+                                "run_url": run.html_url,
                             },
                         )
                     ]
@@ -181,6 +182,8 @@ class EventProcessor:
                                 "runner_group_name": job.runner_group_name or "",
                                 "labels": job.labels,
                                 "pool_name": self.get_mdp_name(job.labels),
+                                "run_url": job.run_url,
+                                "job_url": job.html_url,
                             },
                         )
                     ]
@@ -198,6 +201,7 @@ class EventProcessor:
                                 timestamp=datetime.now(UTC),
                                 attributes={
                                     "type": "workflow_job_step",
+                                    "step_id": f"{job.id}-{step.number}",
                                     "step_name": step.name,
                                     "step_number": str(step.number),
                                     "started_at": step.started_at,
@@ -214,6 +218,8 @@ class EventProcessor:
                                     "repository_full_name": event.repository.full_name,
                                     "conclusion": step.conclusion or "",
                                     "status": step.status,
+                                    "run_url": job.run_url,
+                                    "job_url": job.html_url,
                                 },
                             )
                         ]

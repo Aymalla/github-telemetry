@@ -1,6 +1,6 @@
 """Tests for GitHub signature validation."""
 
-from src.frontend.github_signature import validate_github_signature
+from src.shared.github_signature import validate_github_signature
 from tests.conftest import compute_signature
 
 

@@ -5,10 +5,10 @@ import signal
 import time
 from types import FrameType
 
-from src.backend.processor import EventProcessor
-from src.backend.telemetry import create_telemetry_client
 from src.shared.config import BackendSettings
+from src.shared.processor import EventProcessor
 from src.shared.queue_client import create_queue_client
+from src.shared.telemetry import create_telemetry_client
 
 # Configure logging
 logging.basicConfig(

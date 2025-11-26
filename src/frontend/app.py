@@ -8,8 +8,8 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from src.frontend.github_signature import validate_github_signature
 from src.shared.config import FrontendSettings
+from src.shared.github_signature import validate_github_signature
 from src.shared.queue_client import QueueClientWrapper, create_queue_client
 
 # Configure logging

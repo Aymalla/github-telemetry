@@ -94,6 +94,7 @@ class WorkflowJob(BaseModel):
     created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    run_url: str = ""
     html_url: str = ""
     runner_name: str | None = None
     runner_group_name: str | None = None
