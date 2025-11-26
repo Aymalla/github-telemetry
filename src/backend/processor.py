@@ -206,6 +206,8 @@ class EventProcessor:
                                     "run_id": str(job.run_id),
                                     "parent_job_id": str(job.id),
                                     "parent_job_name": job.name,
+                                    "job_id": str(job.id),
+                                    "job_name": job.name,
                                     "workflow_name": job.workflow_name,
                                     "repository_id": str(event.repository.id),
                                     "repository": event.repository.name,
