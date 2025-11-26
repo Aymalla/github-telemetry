@@ -105,8 +105,38 @@ class EventProcessor:
                 processed_at=datetime.now(UTC),
             )
 
-            # Send telemetry
-            self._send_workflow_telemetry(metrics)
+            # Send telemetry (only if duration is available)
+            if metrics.duration_seconds is not None:
+                self._telemetry.export(
+                    [
+                        MetricValue(
+                            name="duration_seconds",
+                            value=metrics.duration_seconds,
+                            timestamp=metrics.processed_at,
+                            attributes={
+                                "type": "workflow_run",
+                                "duration_seconds": str(metrics.duration_seconds),
+                                "queue_duration_seconds": str(metrics.queue_duration_seconds),
+                                "created_at": metrics.created_at,
+                                "started_at": metrics.started_at,
+                                "completed_at": metrics.completed_at,
+                                "run_id": str(metrics.workflow_run_id),
+                                "workflow_name": metrics.workflow_name,
+                                "run_number": str(metrics.run_number),
+                                "run_attempt": str(metrics.run_attempt),
+                                "repository_id": str(metrics.repository_id),
+                                "repository": metrics.repository_name,
+                                "repository_full_name": metrics.repository_full_name,
+                                "status": metrics.status,
+                                "conclusion": metrics.conclusion or "",
+                                "event_trigger": metrics.event_trigger,
+                                "head_branch": metrics.head_branch,
+                                "triggered_by": metrics.triggered_by,
+                                "action": metrics.action,
+                            },
+                        )
+                    ]
+                )
 
             logger.info(
                 "Processed workflow_run: %s/%s run #%d (%s)",
@@ -183,50 +213,6 @@ class EventProcessor:
             logger.error("Failed to process workflow_job: %s", str(e))
             return False
 
-    def _send_workflow_telemetry(self, metrics: WorkflowMetrics) -> None:
-        """Send workflow metrics to Application Insights.
-
-        Args:
-            metrics: Workflow metrics to send
-        """
-
-        measurements: dict[str, float] = {}
-        if metrics.duration_seconds is not None:
-            measurements["duration_seconds"] = metrics.duration_seconds
-
-        # Track duration as a separate metric for aggregation
-        if metrics.duration_seconds is not None:
-            self._telemetry.export(
-                [
-                    MetricValue(
-                        name="duration_seconds",
-                        value=metrics.duration_seconds,
-                        timestamp=metrics.processed_at,
-                        attributes={
-                            "type": "workflow_run",
-                            "duration_seconds": str(metrics.duration_seconds),
-                            "queue_duration_seconds": str(metrics.queue_duration_seconds),
-                            "created_at": metrics.created_at.isoformat(),
-                            "started_at": metrics.started_at.isoformat(),
-                            "completed_at": metrics.completed_at.isoformat(),
-                            "run_id": str(metrics.workflow_run_id),
-                            "workflow_name": metrics.workflow_name,
-                            "run_number": str(metrics.run_number),
-                            "run_attempt": str(metrics.run_attempt),
-                            "repository_id": str(metrics.repository_id),
-                            "repository": metrics.repository_name,
-                            "repository_full_name": metrics.repository_full_name,
-                            "status": metrics.status,
-                            "conclusion": metrics.conclusion or "",
-                            "event_trigger": metrics.event_trigger,
-                            "head_branch": metrics.head_branch,
-                            "triggered_by": metrics.triggered_by,
-                            "action": metrics.action,
-                        },
-                    )
-                ]
-            )
-
     def _send_job_telemetry(self, metrics: JobMetrics) -> None:
         """Send job metrics to Application Insights.
 
@@ -248,9 +234,9 @@ class EventProcessor:
                             "job_name": metrics.job_name,
                             "duration_seconds": str(metrics.duration_seconds),
                             "queue_duration_seconds": str(metrics.queue_duration_seconds),
-                            "created_at": metrics.created_at.isoformat(),
-                            "started_at": metrics.started_at.isoformat(),
-                            "completed_at": metrics.completed_at.isoformat(),
+                            "created_at": metrics.created_at,
+                            "started_at": metrics.started_at,
+                            "completed_at": metrics.completed_at,
                             "run_id": str(metrics.workflow_run_id),
                             "workflow_name": metrics.workflow_name,
                             "repository_id": str(metrics.repository_id),
@@ -281,8 +267,8 @@ class EventProcessor:
                                 "type": "workflow_job_step",
                                 "step_name": step.name,
                                 "step_number": str(step.number),
-                                "started_at": step.started_at.isoformat(),
-                                "completed_at": step.completed_at.isoformat(),
+                                "started_at": step.started_at,
+                                "completed_at": step.completed_at,
                                 "duration_seconds": str(step_duration),
                                 "run_id": str(metrics.workflow_run_id),
                                 "job_id": str(metrics.job_id),
