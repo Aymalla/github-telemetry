@@ -128,92 +128,13 @@ class QueueMessage(BaseModel):
     payload: dict[str, Any]
 
 
-class WorkflowMetrics(BaseModel):
-    """Enriched workflow metrics for telemetry."""
-
-    # Identifiers
-    workflow_run_id: int
-    workflow_id: int
-    workflow_name: str
-    run_number: int
-    run_attempt: int
-
-    # Repository info
-    repository_id: int
-    repository_name: str
-    repository_full_name: str
-
-    # Timing
-    status: str
-    conclusion: str | None = None
-    created_at: datetime | None = None
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    duration_seconds: float | None = None
-    queue_duration_seconds: float | None = None
-
-    # Context
-    event_trigger: str = ""
-    head_branch: str = ""
-    head_sha: str = ""
-    triggered_by: str = ""
-
-    # Metadata
-    event_type: str
-    action: str
-    processed_at: datetime
-
-
-class JobMetrics(BaseModel):
-    """Enriched job metrics for telemetry."""
-
-    # Identifiers
-    job_id: int
-    job_name: str
-    workflow_run_id: int
-    workflow_name: str
-
-    # Repository info
-    repository_id: int
-    repository_name: str
-    repository_full_name: str
-
-    # Timing
-    status: str
-    conclusion: str | None = None
-    created_at: datetime | None = None
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    duration_seconds: float | None = None
-    queue_duration_seconds: float | None = None
-
-    # Runner info
-    runner_name: str | None = None
-    runner_group_name: str | None = None
-    labels: list[str] = Field(default_factory=list)
-
-    # Metadata
-    event_type: str
-    action: str
-    processed_at: datetime
-
-    # Context
-    event_trigger: str = ""
-    head_branch: str = ""
-    head_sha: str = ""
-    triggered_by: str = ""
-
-    # Steps
-    steps: list[Step] = Field(default_factory=list)
-
-
 class MetricValue:
     name: str
     min_value: float | None
     max_value: float | None
     total_value: float
     count: int
-    attributes: dict | None
+    attributes: dict[str, Any] | None
     value: float
     values: list[float]
     timestamp: datetime

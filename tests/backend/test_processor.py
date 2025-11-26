@@ -16,8 +16,6 @@ def mock_telemetry() -> MagicMock:
     mock = MagicMock(spec=TelemetryClient)
     mock.export = MagicMock()
     return mock
-    mock.export = MagicMock()
-    return mock
 
 
 @pytest.fixture
