@@ -196,10 +196,8 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Verify export was called multiple times (once for job, once for each step)
-        assert mock_telemetry.export.called
-        # Check that export was called multiple times for job and steps
-        assert mock_telemetry.export.call_count >= 2
+        # Export should be called multiple times: one for job duration + one per step
+        assert mock_telemetry.export.call_count >= 3
 
     def test_process_unknown_event(
         self, processor: EventProcessor, mock_telemetry: MagicMock
@@ -259,6 +257,5 @@ class TestEventProcessor:
         result = processor.process_message(message)
         assert result is True
 
-        # For in_progress workflows, no metrics should be exported (no duration yet)
-        # The processor only exports duration_seconds for completed workflows
-        assert not mock_telemetry.export.called
+        # In-progress workflow should not export duration metric
+        assert mock_telemetry.export.call_count == 0

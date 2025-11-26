@@ -197,6 +197,12 @@ class JobMetrics(BaseModel):
     action: str
     processed_at: datetime
 
+    # Context
+    event_trigger: str = ""
+    head_branch: str = ""
+    head_sha: str = ""
+    triggered_by: str = ""
+
     # Steps
     steps: list[Step] = Field(default_factory=list)
 
