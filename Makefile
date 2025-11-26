@@ -86,12 +86,18 @@ publish-backend: # to container registry
 
 build: build-frontend build-backend
 
+publish: publish-frontend publish-backend
+
 # Run Locally
 run-frontend:
 	python -m uvicorn src.frontend.app:app --host 0.0.0.0 --port 8080 --reload
 
 run-backend:
 	python -m src.backend.app
+
+start-gh-workflow-runner:
+	gh workflow run test-telemetry-duration.yml
+	gh workflow run test-telemetry-failures.yml
 
 # Cleanup
 clean:

@@ -6,10 +6,9 @@ from typing import Any
 
 from src.backend.telemetry import TelemetryClient
 from src.shared.models import (
-    JobMetrics,
+    MetricValue,
     QueueMessage,
     WorkflowJobEvent,
-    WorkflowMetrics,
     WorkflowRunEvent,
 )
 
@@ -71,37 +70,50 @@ class EventProcessor:
             run = event.workflow_run
 
             # Calculate duration if completed
-            duration_seconds: float | None = None
             if run.run_started_at and run.updated_at and run.status == "completed":
                 duration = run.updated_at - run.run_started_at
                 duration_seconds = duration.total_seconds()
+                queue_duration_seconds: float = 0
+                if run.created_at:
+                    queue_duration_seconds = (run.run_started_at - run.created_at).total_seconds()
 
-            # Create metrics
-            metrics = WorkflowMetrics(
-                workflow_run_id=run.id,
-                workflow_id=run.workflow_id,
-                workflow_name=run.name,
-                run_number=run.run_number,
-                run_attempt=run.run_attempt,
-                repository_id=event.repository.id,
-                repository_name=event.repository.name,
-                repository_full_name=event.repository.full_name,
-                status=run.status,
-                conclusion=run.conclusion,
-                started_at=run.run_started_at,
-                completed_at=run.updated_at if run.status == "completed" else None,
-                duration_seconds=duration_seconds,
-                event_trigger=run.event,
-                head_branch=run.head_branch,
-                head_sha=run.head_sha,
-                triggered_by=event.sender.login,
-                event_type=message.event_type,
-                action=event.action,
-                processed_at=datetime.now(UTC),
-            )
+                completed_at: datetime = run.updated_at
 
-            # Send telemetry
-            self._send_workflow_telemetry(metrics)
+                # Send telemetry for the workflow run
+                self._telemetry.export(
+                    [
+                        MetricValue(
+                            name="duration_seconds",
+                            value=duration_seconds,
+                            timestamp=datetime.now(UTC),
+                            attributes={
+                                "type": "workflow_run",
+                                "duration_seconds": str(duration_seconds),
+                                "queue_duration_seconds": str(queue_duration_seconds),
+                                "created_at": run.created_at,
+                                "started_at": run.run_started_at,
+                                "completed_at": completed_at,
+                                "run_id": str(run.id),
+                                "workflow_name": run.name,
+                                "run_number": str(run.run_number),
+                                "run_attempt": str(run.run_attempt),
+                                "repository_id": str(event.repository.id),
+                                "repository": event.repository.name,
+                                "repository_full_name": event.repository.full_name,
+                                "status": run.status,
+                                "conclusion": run.conclusion or "",
+                                "event_trigger": run.event,
+                                "head_branch": run.head_branch,
+                                "triggered_by": event.sender.login,
+                                "action": event.action,
+                                "runner_name": run.runner_name or "",
+                                "runner_group_name": run.runner_group_name or "",
+                                "labels": run.labels,
+                                "pool_name": self.get_mdp_name(run.labels),
+                            },
+                        )
+                    ]
+                )
 
             logger.info(
                 "Processed workflow_run: %s/%s run #%d (%s)",
@@ -131,36 +143,81 @@ class EventProcessor:
             job = event.workflow_job
 
             # Calculate duration if completed
-            duration_seconds: float | None = None
+            duration_seconds: float = 0
+            queue_duration_seconds: float = 0
             if job.started_at and job.completed_at:
                 duration = job.completed_at - job.started_at
                 duration_seconds = duration.total_seconds()
+                if job.created_at:
+                    queue_duration_seconds = (job.started_at - job.created_at).total_seconds()
 
-            # Create metrics using parsed data from the validated model
-            metrics = JobMetrics(
-                job_id=job.id,
-                job_name=job.name,
-                workflow_run_id=job.run_id,
-                workflow_name=job.workflow_name,
-                repository_id=event.repository.id,
-                repository_name=event.repository.name,
-                repository_full_name=event.repository.full_name,
-                status=job.status,
-                conclusion=job.conclusion,
-                started_at=job.started_at,
-                completed_at=job.completed_at,
-                duration_seconds=duration_seconds,
-                runner_name=job.runner_name,
-                runner_group_name=job.runner_group_name,
-                labels=job.labels,
-                event_type=message.event_type,
-                action=event.action,
-                processed_at=datetime.now(UTC),
-                steps=job.steps,
-            )
+                # Create metrics using parsed data from the validated model
 
-            # Send telemetry
-            self._send_job_telemetry(metrics)
+                # Send telemetry
+                self._telemetry.export(
+                    [
+                        MetricValue(
+                            name="duration_seconds",
+                            value=duration_seconds,
+                            timestamp=datetime.now(UTC),
+                            attributes={
+                                "type": "workflow_job",
+                                "job_id": str(job.id),
+                                "job_name": job.name,
+                                "duration_seconds": str(duration_seconds),
+                                "queue_duration_seconds": str(queue_duration_seconds),
+                                "created_at": job.created_at,
+                                "started_at": job.started_at,
+                                "completed_at": job.completed_at,
+                                "run_id": str(job.run_id),
+                                "workflow_name": job.workflow_name,
+                                "repository_id": str(event.repository.id),
+                                "repository": event.repository.name,
+                                "repository_full_name": event.repository.full_name,
+                                "status": job.status,
+                                "conclusion": job.conclusion or "",
+                                "action": event.action,
+                                "runner_name": job.runner_name or "",
+                                "runner_group_name": job.runner_group_name or "",
+                                "labels": job.labels,
+                                "pool_name": self.get_mdp_name(job.labels),
+                            },
+                        )
+                    ]
+                )
+
+            # Track step metrics for completed jobs
+            for step in job.steps:
+                if step.started_at and step.completed_at:
+                    step_duration = (step.completed_at - step.started_at).total_seconds()
+                    self._telemetry.export(
+                        [
+                            MetricValue(
+                                name="duration_seconds",
+                                value=step_duration,
+                                timestamp=datetime.now(UTC),
+                                attributes={
+                                    "type": "workflow_job_step",
+                                    "step_name": step.name,
+                                    "step_number": str(step.number),
+                                    "started_at": step.started_at,
+                                    "completed_at": step.completed_at,
+                                    "duration_seconds": str(step_duration),
+                                    "run_id": str(job.run_id),
+                                    "parent_job_id": str(job.id),
+                                    "parent_job_name": job.name,
+                                    "job_id": str(job.id),
+                                    "job_name": job.name,
+                                    "workflow_name": job.workflow_name,
+                                    "repository_id": str(event.repository.id),
+                                    "repository": event.repository.name,
+                                    "repository_full_name": event.repository.full_name,
+                                    "conclusion": step.conclusion or "",
+                                    "status": step.status,
+                                },
+                            )
+                        ]
+                    )
 
             logger.info(
                 "Processed workflow_job: %s/%s (%s)",
@@ -174,109 +231,19 @@ class EventProcessor:
             logger.error("Failed to process workflow_job: %s", str(e))
             return False
 
-    def _send_workflow_telemetry(self, metrics: WorkflowMetrics) -> None:
-        """Send workflow metrics to Application Insights.
+    def get_mdp_name(self, labels: list[str]) -> str:
+        """Get the Managed DevOps pool name from the labels in case of runner using Azure Managed DevOps Pools.
 
         Args:
-            metrics: Workflow metrics to send
+            labels (list[str]): List of labels from the workflow job.
+        Returns:
+            str: The Managed DevOps pool name if found, else an empty string.
         """
-        properties = {
-            "workflow_run_id": str(metrics.workflow_run_id),
-            "workflow_id": str(metrics.workflow_id),
-            "workflow_name": metrics.workflow_name,
-            "run_number": str(metrics.run_number),
-            "run_attempt": str(metrics.run_attempt),
-            "repository_id": str(metrics.repository_id),
-            "repository_name": metrics.repository_name,
-            "repository_full_name": metrics.repository_full_name,
-            "status": metrics.status,
-            "conclusion": metrics.conclusion or "",
-            "event_trigger": metrics.event_trigger,
-            "head_branch": metrics.head_branch,
-            "triggered_by": metrics.triggered_by,
-            "action": metrics.action,
-        }
 
-        measurements: dict[str, float] = {}
-        if metrics.duration_seconds is not None:
-            measurements["duration_seconds"] = metrics.duration_seconds
-
-        self._telemetry.track_workflow_event(
-            name="WorkflowRun",
-            properties=properties,
-            measurements=measurements,
-        )
-
-        # Track duration as a separate metric for aggregation
-        if metrics.duration_seconds is not None:
-            self._telemetry.track_metric(
-                name="workflow_duration_seconds",
-                value=metrics.duration_seconds,
-                properties={
-                    "workflow_name": metrics.workflow_name,
-                    "repository_full_name": metrics.repository_full_name,
-                    "conclusion": metrics.conclusion or "",
-                },
-            )
-
-    def _send_job_telemetry(self, metrics: JobMetrics) -> None:
-        """Send job metrics to Application Insights.
-
-        Args:
-            metrics: Job metrics to send
-        """
-        properties = {
-            "job_id": str(metrics.job_id),
-            "job_name": metrics.job_name,
-            "workflow_run_id": str(metrics.workflow_run_id),
-            "workflow_name": metrics.workflow_name,
-            "repository_id": str(metrics.repository_id),
-            "repository_name": metrics.repository_name,
-            "repository_full_name": metrics.repository_full_name,
-            "status": metrics.status,
-            "conclusion": metrics.conclusion or "",
-            "runner_name": metrics.runner_name or "",
-            "runner_group_name": metrics.runner_group_name or "",
-            "labels": ",".join(metrics.labels),
-            "action": metrics.action,
-        }
-
-        measurements: dict[str, float] = {}
-        if metrics.duration_seconds is not None:
-            measurements["duration_seconds"] = metrics.duration_seconds
-
-        self._telemetry.track_workflow_event(
-            name="WorkflowJob",
-            properties=properties,
-            measurements=measurements,
-        )
-
-        # Track duration as a separate metric for aggregation
-        if metrics.duration_seconds is not None:
-            self._telemetry.track_metric(
-                name="job_duration_seconds",
-                value=metrics.duration_seconds,
-                properties={
-                    "job_name": metrics.job_name,
-                    "workflow_name": metrics.workflow_name,
-                    "repository_full_name": metrics.repository_full_name,
-                    "conclusion": metrics.conclusion or "",
-                },
-            )
-
-        # Track step metrics for completed jobs
-        for step in metrics.steps:
-            if step.started_at and step.completed_at:
-                step_duration = (step.completed_at - step.started_at).total_seconds()
-                self._telemetry.track_metric(
-                    name="step_duration_seconds",
-                    value=step_duration,
-                    properties={
-                        "step_name": step.name,
-                        "step_number": str(step.number),
-                        "job_name": metrics.job_name,
-                        "workflow_name": metrics.workflow_name,
-                        "repository_full_name": metrics.repository_full_name,
-                        "conclusion": step.conclusion or "",
-                    },
-                )
+        pool_name = ""
+        if labels:
+            for value in labels:
+                if "ManagedDevOps.Pool=" in value:
+                    pool_name = value.split("ManagedDevOps.Pool=")[1]
+                    break
+        return pool_name

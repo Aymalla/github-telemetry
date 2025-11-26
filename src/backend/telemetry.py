@@ -1,128 +1,102 @@
-"""Azure Application Insights telemetry client."""
+"""Azure Application Insights telemetry client using azure-monitor-opentelemetry."""
 
 import logging
-from typing import Any
+from datetime import datetime
 
-from opencensus.ext.azure.log_exporter import AzureLogHandler
-from opencensus.ext.azure.trace_exporter import AzureExporter
-from opencensus.trace import execution_context
-from opencensus.trace.samplers import AlwaysOnSampler
-from opencensus.trace.span import SpanKind
-from opencensus.trace.tracer import Tracer
+from azure.monitor.opentelemetry.exporter import AzureMonitorMetricExporter
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics.export import (
+    Gauge,
+    Metric,
+    MetricsData,
+    NumberDataPoint,
+    ResourceMetrics,
+    ScopeMetrics,
+)
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.util.instrumentation import InstrumentationScope
+
+from src.shared.models import MetricValue
 
 logger = logging.getLogger(__name__)
 
 
 class TelemetryClient:
-    """Client for sending telemetry to Azure Application Insights."""
+    """Client for sending telemetry to Azure Application Insights using azure-monitor-opentelemetry."""
 
     def __init__(self, connection_string: str):
-        """Initialize the telemetry client.
-
-        Args:
-            connection_string: Application Insights connection string
-        """
         self._connection_string = connection_string
-        self._tracer: Tracer | None = None
-        self._logger: logging.Logger | None = None
+        self.exporter = None
+        self.meter_provider = metrics.get_meter_provider()
 
         if connection_string:
-            self._setup_telemetry()
+            try:
+                self.exporter = AzureMonitorMetricExporter(connection_string=connection_string)
+                logger.info("Application Insights telemetry initialized")
+            except Exception as e:
+                logger.error("Failed to initialize Application Insights: %s", str(e))
         else:
             logger.warning(
                 "No Application Insights connection string provided. "
                 "Telemetry will be logged locally only."
             )
 
-    def _setup_telemetry(self) -> None:
-        """Set up Application Insights exporters."""
-        try:
-            # Set up trace exporter
-            exporter = AzureExporter(connection_string=self._connection_string)
-            self._tracer = Tracer(
-                exporter=exporter,
-                sampler=AlwaysOnSampler(),
-            )
-
-            # Set up log handler
-            self._logger = logging.getLogger("telemetry")
-            self._logger.setLevel(logging.INFO)
-
-            # Add Azure handler if not already present
-            if not any(isinstance(h, AzureLogHandler) for h in self._logger.handlers):
-                azure_handler = AzureLogHandler(connection_string=self._connection_string)
-                self._logger.addHandler(azure_handler)
-
-            logger.info("Application Insights telemetry initialized")
-        except Exception as e:
-            logger.error("Failed to initialize Application Insights: %s", str(e))
-
-    def track_workflow_event(
-        self,
-        name: str,
-        properties: dict[str, Any],
-        measurements: dict[str, float] | None = None,
-    ) -> None:
-        """Track a workflow event.
-
+    def export(self, metrics_data: list[MetricValue]) -> None:
+        """Export metrics to Azure Monitor
         Args:
-            name: Event name
-            properties: Event properties
-            measurements: Numeric measurements
+            metrics_data (list[MetricValue]): List of MetricValue objects to be exported.
         """
-        measurements = measurements or {}
+        if not self.exporter:
+            logger.debug("No exporter configured, skipping metric export")
+            return
 
-        if self._tracer:
-            with self._tracer.span(name=name) as span:
-                span.span_kind = SpanKind.SERVER
-                for key, value in properties.items():
-                    span.add_attribute(key, str(value))
-                for key, value in measurements.items():
-                    span.add_attribute(key, value)
+        azure_monitor_metrics: list[ResourceMetrics] = []
+        for metric in metrics_data:
+            attributes = metric.attributes or {}
+            # Ensure all attribute values are strings
+            attributes = {str(k): str(v) for k, v in attributes.items()}
 
-        if self._logger:
-            self._logger.info(
-                "%s: %s",
-                name,
-                {**properties, **measurements},
-                extra={"custom_dimensions": {**properties, **measurements}},
+            exported_metric = Metric(
+                name=metric.name,
+                description=metric.name,
+                unit="1",
+                data=Gauge(
+                    [
+                        NumberDataPoint(
+                            attributes=attributes,
+                            start_time_unix_nano=self.to_ns_time_value(metric.timestamp),
+                            time_unix_nano=self.to_ns_time_value(metric.timestamp),
+                            value=metric.value,
+                            exemplars=[],
+                        )
+                    ]
+                ),
             )
-        else:
-            logger.info(
-                "Event: %s, Properties: %s, Measurements: %s", name, properties, measurements
+
+            azure_monitor_metrics.append(
+                ResourceMetrics(
+                    resource=Resource.create(
+                        {
+                            "service.namespace": "nokia",
+                            "service.name": "metrics-processor",
+                            "cloud.role": "metrics-processor",
+                        }
+                    ),
+                    scope_metrics=[
+                        ScopeMetrics(
+                            scope=InstrumentationScope(name="gh-job", version="1.0.0"),
+                            metrics=[exported_metric],
+                            schema_url="",
+                        )
+                    ],
+                    schema_url="",
+                )
             )
 
-    def track_metric(
-        self,
-        name: str,
-        value: float,
-        properties: dict[str, Any] | None = None,
-    ) -> None:
-        """Track a metric.
+        self.exporter.export(MetricsData(resource_metrics=azure_monitor_metrics))
 
-        Args:
-            name: Metric name
-            value: Metric value
-            properties: Additional properties
-        """
-        properties = properties or {}
-
-        if self._logger:
-            self._logger.info(
-                "Metric: %s = %s",
-                name,
-                value,
-                extra={"custom_dimensions": {"metric_name": name, "value": value, **properties}},
-            )
-        else:
-            logger.info("Metric: %s = %s, Properties: %s", name, value, properties)
-
-    def flush(self) -> None:
-        """Flush any pending telemetry."""
-        if self._tracer:
-            tracer = execution_context.get_opencensus_tracer()
-            if tracer:
-                tracer.finish()
+    def to_ns_time_value(self, dt: datetime) -> int:
+        return int(dt.timestamp() * 1e9)
 
 
 def create_telemetry_client(connection_string: str) -> TelemetryClient:

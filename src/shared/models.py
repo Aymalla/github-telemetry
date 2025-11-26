@@ -1,5 +1,6 @@
 """Pydantic models for GitHub webhook events and telemetry data."""
 
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -65,6 +66,9 @@ class WorkflowRun(BaseModel):
     updated_at: datetime | None = None
     run_started_at: datetime | None = None
     html_url: str = ""
+    runner_name: str | None = None
+    runner_group_name: str | None = None
+    labels: list[str] = Field(default_factory=list)
 
 
 class Step(BaseModel):
@@ -87,6 +91,7 @@ class WorkflowJob(BaseModel):
     workflow_name: str = ""
     status: str
     conclusion: str | None = None
+    created_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     html_url: str = ""
@@ -126,70 +131,44 @@ class QueueMessage(BaseModel):
     payload: dict[str, Any]
 
 
-class WorkflowMetrics(BaseModel):
-    """Enriched workflow metrics for telemetry."""
+class MetricValue:
+    name: str
+    min_value: float | None
+    max_value: float | None
+    total_value: float
+    count: int
+    attributes: dict[str, Any] | None
+    value: float
+    values: list[float]
+    timestamp: datetime
 
-    # Identifiers
-    workflow_run_id: int
-    workflow_id: int
-    workflow_name: str
-    run_number: int
-    run_attempt: int
+    def __init__(
+        self, name: str, value: float, timestamp: datetime, attributes: dict[str, Any] | None
+    ):
+        self.name = name
+        self.timestamp = timestamp
+        self.min_value = value
+        self.max_value = value
+        self.total_value = value
+        self.count = 1
+        self.attributes = attributes
+        self.value = value
+        self.values = [value]
 
-    # Repository info
-    repository_id: int
-    repository_name: str
-    repository_full_name: str
+    def add_value(self, value: float) -> None:
+        if self.min_value is None or value < self.min_value:
+            self.min_value = value
+        if self.max_value is None or value > self.max_value:
+            self.max_value = value
+        self.total_value += value
+        self.count += 1
+        self.values.append(value)
 
-    # Timing
-    status: str
-    conclusion: str | None = None
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    duration_seconds: float | None = None
+        # use average as the representative value
+        self.value = self.total_value / self.count
 
-    # Context
-    event_trigger: str = ""
-    head_branch: str = ""
-    head_sha: str = ""
-    triggered_by: str = ""
+    def to_json(self, indent: int | None = 4) -> str:
+        return json.dumps(self.__dict__, indent=indent)
 
-    # Metadata
-    event_type: str
-    action: str
-    processed_at: datetime
-
-
-class JobMetrics(BaseModel):
-    """Enriched job metrics for telemetry."""
-
-    # Identifiers
-    job_id: int
-    job_name: str
-    workflow_run_id: int
-    workflow_name: str
-
-    # Repository info
-    repository_id: int
-    repository_name: str
-    repository_full_name: str
-
-    # Timing
-    status: str
-    conclusion: str | None = None
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    duration_seconds: float | None = None
-
-    # Runner info
-    runner_name: str | None = None
-    runner_group_name: str | None = None
-    labels: list[str] = Field(default_factory=list)
-
-    # Metadata
-    event_type: str
-    action: str
-    processed_at: datetime
-
-    # Steps
-    steps: list[Step] = Field(default_factory=list)
+    def __repr__(self) -> str:
+        return f"MetricValue(name={self.name}, min={self.min_value}, max={self.max_value}, total={self.total_value}, count={self.count}, attributes={self.attributes}, values={self.values}, timestamp={self.timestamp})"

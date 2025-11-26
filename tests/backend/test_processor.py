@@ -13,7 +13,9 @@ from src.shared.models import QueueMessage
 @pytest.fixture
 def mock_telemetry() -> MagicMock:
     """Create a mock telemetry client."""
-    return MagicMock(spec=TelemetryClient)
+    mock = MagicMock(spec=TelemetryClient)
+    mock.export = MagicMock()
+    return mock
 
 
 @pytest.fixture
@@ -79,6 +81,7 @@ def workflow_job_message() -> QueueMessage:
                 "workflow_name": "CI",
                 "status": "completed",
                 "conclusion": "success",
+                "created_at": "2024-01-01T00:02:00Z",
                 "started_at": "2024-01-01T00:02:00Z",
                 "completed_at": "2024-01-01T00:08:00Z",
                 "html_url": "https://github.com/owner/repo/actions/runs/123456/jobs/789012",
@@ -133,13 +136,14 @@ class TestEventProcessor:
         result = processor.process_message(workflow_run_message)
         assert result is True
 
-        # Verify telemetry was sent
-        assert mock_telemetry.track_workflow_event.called
-        call_args = mock_telemetry.track_workflow_event.call_args
-        assert call_args.kwargs["name"] == "WorkflowRun"
-        assert call_args.kwargs["properties"]["workflow_name"] == "CI"
-        assert call_args.kwargs["properties"]["status"] == "completed"
-        assert call_args.kwargs["properties"]["conclusion"] == "success"
+        # Verify telemetry was sent via export
+        assert mock_telemetry.export.called
+        call_args = mock_telemetry.export.call_args
+        metrics = call_args[0][0]  # First positional arg is the metrics list
+        assert len(metrics) > 0
+        # Check that metrics were exported (duration_seconds for workflows)
+        metric_names = [m.name for m in metrics]
+        assert "duration_seconds" in metric_names
 
     def test_process_workflow_run_calculates_duration(
         self,
@@ -151,12 +155,15 @@ class TestEventProcessor:
         result = processor.process_message(workflow_run_message)
         assert result is True
 
-        # Verify duration metric was tracked
-        assert mock_telemetry.track_metric.called
-        metric_call = mock_telemetry.track_metric.call_args
-        assert metric_call.kwargs["name"] == "workflow_duration_seconds"
+        # Verify export was called with metrics
+        assert mock_telemetry.export.called
+        call_args = mock_telemetry.export.call_args
+        metrics = call_args[0][0]
+        # Check for duration metric
+        duration_metrics = [m for m in metrics if "duration" in m.name.lower()]
+        assert len(duration_metrics) > 0
         # Duration should be 9 minutes = 540 seconds (10:00 - 01:00)
-        assert metric_call.kwargs["value"] == 540.0
+        assert any(m.value == 540.0 for m in duration_metrics)
 
     def test_process_workflow_job(
         self,
@@ -168,12 +175,14 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Verify telemetry was sent
-        assert mock_telemetry.track_workflow_event.called
-        call_args = mock_telemetry.track_workflow_event.call_args
-        assert call_args.kwargs["name"] == "WorkflowJob"
-        assert call_args.kwargs["properties"]["job_name"] == "build"
-        assert call_args.kwargs["properties"]["status"] == "completed"
+        # Verify telemetry was sent via export
+        assert mock_telemetry.export.called
+        call_args = mock_telemetry.export.call_args
+        metrics = call_args[0][0]
+        assert len(metrics) > 0
+        # Check that job metrics were exported (duration_seconds for jobs)
+        metric_names = [m.name for m in metrics]
+        assert "duration_seconds" in metric_names
 
     def test_process_workflow_job_tracks_step_metrics(
         self,
@@ -185,14 +194,8 @@ class TestEventProcessor:
         result = processor.process_message(workflow_job_message)
         assert result is True
 
-        # Find step duration metric calls
-        step_metric_calls = [
-            call
-            for call in mock_telemetry.track_metric.call_args_list
-            if call.kwargs.get("name") == "step_duration_seconds"
-        ]
-        # Should have 2 step metrics (Checkout and Build)
-        assert len(step_metric_calls) == 2
+        # Export should be called multiple times: one for job duration + one per step
+        assert mock_telemetry.export.call_count >= 3
 
     def test_process_unknown_event(
         self, processor: EventProcessor, mock_telemetry: MagicMock
@@ -207,7 +210,7 @@ class TestEventProcessor:
         result = processor.process_message(message)
         # Unknown events are skipped, not retried
         assert result is True
-        assert not mock_telemetry.track_workflow_event.called
+        assert not mock_telemetry.export.called
 
     def test_process_in_progress_workflow(
         self, processor: EventProcessor, mock_telemetry: MagicMock
@@ -252,14 +255,5 @@ class TestEventProcessor:
         result = processor.process_message(message)
         assert result is True
 
-        # Verify telemetry was sent without duration
-        assert mock_telemetry.track_workflow_event.called
-        call_args = mock_telemetry.track_workflow_event.call_args
-        assert call_args.kwargs["properties"]["status"] == "in_progress"
-        # No duration metric should be tracked for in_progress
-        duration_calls = [
-            call
-            for call in mock_telemetry.track_metric.call_args_list
-            if call.kwargs.get("name") == "workflow_duration_seconds"
-        ]
-        assert len(duration_calls) == 0
+        # In-progress workflow should not export duration metric
+        assert mock_telemetry.export.call_count == 0
