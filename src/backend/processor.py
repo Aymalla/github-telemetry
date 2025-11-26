@@ -76,6 +76,7 @@ class EventProcessor:
                 queue_duration_seconds = (run.run_started_at - run.created_at).total_seconds()
                 completed_at: datetime = run.updated_at
 
+                # Send telemetry for the workflow run
                 self._telemetry.export(
                     [
                         MetricValue(
@@ -102,6 +103,10 @@ class EventProcessor:
                                 "head_branch": run.head_branch,
                                 "triggered_by": event.sender.login,
                                 "action": event.action,
+                                "runner_name": run.runner_name or "",
+                                "runner_group_name": run.runner_group_name or "",
+                                "labels": run.labels,
+                                "pool_name": self.get_mdp_name(run.labels),
                             },
                         )
                     ]
@@ -168,6 +173,10 @@ class EventProcessor:
                                 "status": job.status,
                                 "conclusion": job.conclusion or "",
                                 "action": event.action,
+                                "runner_name": job.runner_name or "",
+                                "runner_group_name": job.runner_group_name or "",
+                                "labels": job.labels,
+                                "pool_name": self.get_mdp_name(job.labels),
                             },
                         )
                     ]
@@ -198,6 +207,7 @@ class EventProcessor:
                                     "repository": event.repository.name,
                                     "repository_full_name": event.repository.full_name,
                                     "conclusion": step.conclusion or "",
+                                    "status": step.status,
                                 },
                             )
                         ]
@@ -215,3 +225,19 @@ class EventProcessor:
             logger.error("Failed to process workflow_job: %s", str(e))
             return False
 
+    def get_mdp_name(self, labels: list[str]) -> str:
+        """Get the Managed DevOps pool name from the labels in case of runner using Azure Managed DevOps Pools.
+
+        Args:
+            labels (list[str]): List of labels from the workflow job.
+        Returns:
+            str: The Managed DevOps pool name if found, else an empty string.
+        """
+
+        pool_name = ""
+        if labels:
+            for value in labels:
+                if "ManagedDevOps.Pool=" in value:
+                    pool_name = value.split("ManagedDevOps.Pool=")[1]
+                    break
+        return pool_name

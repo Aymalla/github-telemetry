@@ -66,6 +66,9 @@ class WorkflowRun(BaseModel):
     updated_at: datetime | None = None
     run_started_at: datetime | None = None
     html_url: str = ""
+    runner_name: str | None = None
+    runner_group_name: str | None = None
+    labels: list[str] = Field(default_factory=list)
 
 
 class Step(BaseModel):
