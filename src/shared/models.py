@@ -1,5 +1,6 @@
 """Pydantic models for GitHub webhook events and telemetry data."""
 
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -198,3 +199,44 @@ class JobMetrics(BaseModel):
 
     # Steps
     steps: list[Step] = Field(default_factory=list)
+
+
+class MetricValue:
+    name: str
+    min_value: float | None
+    max_value: float | None
+    total_value: float
+    count: int
+    attributes: dict | None
+    value: float
+    values: list[float]
+    timestamp: datetime
+
+    def __init__(self, name: str, value: float, timestamp: datetime, attributes: dict | None):
+        self.name = name
+        self.timestamp = timestamp
+        self.min_value = value
+        self.max_value = value
+        self.total_value = value
+        self.count = 1
+        self.attributes = attributes
+        self.value = value
+        self.values = [value]
+
+    def add_value(self, value: float) -> None:
+        if self.min_value is None or value < self.min_value:
+            self.min_value = value
+        if self.max_value is None or value > self.max_value:
+            self.max_value = value
+        self.total_value += value
+        self.count += 1
+        self.values.append(value)
+
+        # use average as the representative value
+        self.value = self.total_value / self.count
+
+    def to_json(self, indent: int | None = 4) -> str:
+        return json.dumps(self.__dict__, indent=indent)
+
+    def __repr__(self) -> str:
+        return f"MetricValue(name={self.name}, min={self.min_value}, max={self.max_value}, total={self.total_value}, count={self.count}, attributes={self.attributes}, values={self.values}, timestamp={self.timestamp})"

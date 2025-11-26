@@ -7,6 +7,7 @@ from typing import Any
 from src.backend.telemetry import TelemetryClient
 from src.shared.models import (
     JobMetrics,
+    MetricValue,
     QueueMessage,
     WorkflowJobEvent,
     WorkflowMetrics,
@@ -187,39 +188,39 @@ class EventProcessor:
         Args:
             metrics: Workflow metrics to send
         """
-        properties = {
-            "workflow_run_id": str(metrics.workflow_run_id),
-            "workflow_id": str(metrics.workflow_id),
-            "workflow_name": metrics.workflow_name,
-            "run_number": str(metrics.run_number),
-            "run_attempt": str(metrics.run_attempt),
-            "repository_id": str(metrics.repository_id),
-            "repository_name": metrics.repository_name,
-            "repository_full_name": metrics.repository_full_name,
-            "status": metrics.status,
-            "conclusion": metrics.conclusion or "",
-            "event_trigger": metrics.event_trigger,
-            "head_branch": metrics.head_branch,
-            "triggered_by": metrics.triggered_by,
-            "action": metrics.action,
-        }
 
         measurements: dict[str, float] = {}
         if metrics.duration_seconds is not None:
             measurements["duration_seconds"] = metrics.duration_seconds
 
-        self._telemetry.track_workflow_event(
-            name="WorkflowRun",
-            properties=properties,
-            measurements=measurements,
-        )
-
         # Track duration as a separate metric for aggregation
         if metrics.duration_seconds is not None:
-            self._telemetry.track_metric(
-                name="workflow_duration_seconds",
-                value=metrics.duration_seconds,
-                properties=properties,
+            self._telemetry.export(
+                [
+                    MetricValue(
+                        name="duration_seconds",
+                        value=metrics.duration_seconds,
+                        timestamp=metrics.processed_at,
+                        attributes={
+                            "type": "workflow_run",
+                            "run_id": str(metrics.workflow_run_id),
+                            "workflow_id": str(metrics.workflow_id),
+                            "workflow_name": metrics.workflow_name,
+                            "run_number": str(metrics.run_number),
+                            "run_attempt": str(metrics.run_attempt),
+                            "repository_id": str(metrics.repository_id),
+                            "repository": metrics.repository_name,
+                            "repository_full_name": metrics.repository_full_name,
+                            "status": metrics.status,
+                            "conclusion": metrics.conclusion or "",
+                            "event_trigger": metrics.event_trigger,
+                            "head_branch": metrics.head_branch,
+                            "triggered_by": metrics.triggered_by,
+                            "action": metrics.action,
+                            "duration_seconds": str(metrics.duration_seconds),
+                        },
+                    )
+                ]
             )
 
     def _send_job_telemetry(self, metrics: JobMetrics) -> None:
@@ -228,56 +229,62 @@ class EventProcessor:
         Args:
             metrics: Job metrics to send
         """
-        properties = {
-            "job_id": str(metrics.job_id),
-            "job_name": metrics.job_name,
-            "workflow_run_id": str(metrics.workflow_run_id),
-            "workflow_name": metrics.workflow_name,
-            "repository_id": str(metrics.repository_id),
-            "repository_name": metrics.repository_name,
-            "repository_full_name": metrics.repository_full_name,
-            "status": metrics.status,
-            "conclusion": metrics.conclusion or "",
-            "runner_name": metrics.runner_name or "",
-            "runner_group_name": metrics.runner_group_name or "",
-            "labels": ",".join(metrics.labels),
-            "action": metrics.action,
-        }
-
-        measurements: dict[str, float] = {}
-        if metrics.duration_seconds is not None:
-            measurements["duration_seconds"] = metrics.duration_seconds
-
-        self._telemetry.track_workflow_event(
-            name="WorkflowJob",
-            properties=properties,
-            measurements=measurements,
-        )
 
         # Track duration as a separate metric for aggregation
         if metrics.duration_seconds is not None:
-            self._telemetry.track_metric(
-                name="job_duration_seconds",
-                value=metrics.duration_seconds,
-                properties={**properties, "duration_seconds": str(metrics.duration_seconds)},
+            self._telemetry.export(
+                [
+                    MetricValue(
+                        name="duration_seconds",
+                        value=metrics.duration_seconds,
+                        timestamp=metrics.processed_at,
+                        attributes={
+                            "type": "workflow_job",
+                            "job_id": str(metrics.job_id),
+                            "job_name": metrics.job_name,
+                            "run_id": str(metrics.workflow_run_id),
+                            "workflow_name": metrics.workflow_name,
+                            "repository_id": str(metrics.repository_id),
+                            "repository": metrics.repository_name,
+                            "repository_full_name": metrics.repository_full_name,
+                            "status": metrics.status,
+                            "conclusion": metrics.conclusion or "",
+                            "runner_name": metrics.runner_name or "",
+                            "runner_group_name": metrics.runner_group_name or "",
+                            "labels": ",".join(metrics.labels),
+                            "action": metrics.action,
+                            "duration_seconds": str(metrics.duration_seconds),
+                        },
+                    )
+                ]
             )
 
         # Track step metrics for completed jobs
         for step in metrics.steps:
             if step.started_at and step.completed_at:
                 step_duration = (step.completed_at - step.started_at).total_seconds()
-                self._telemetry.track_metric(
-                    name="step_duration_seconds",
-                    value=step_duration,
-                    properties={
-                        "step_name": step.name,
-                        "step_number": str(step.number),
-                        "job_name": metrics.job_name,
-                        "workflow_name": metrics.workflow_name,
-                        "repository_full_name": metrics.repository_full_name,
-                        "conclusion": step.conclusion or "",
-                        "started_at": step.started_at.isoformat(),
-                        "completed_at": step.completed_at.isoformat(),
-                        "duration_seconds": str(step_duration),
-                    },
+                self._telemetry.export(
+                    [
+                        MetricValue(
+                            name="duration_seconds",
+                            value=step_duration,
+                            timestamp=metrics.processed_at,
+                            attributes={
+                                "type": "workflow_job_step",
+                                "run_id": str(metrics.workflow_run_id),
+                                "job_id": str(metrics.job_id),
+                                "step_name": step.name,
+                                "step_number": str(step.number),
+                                "job_name": metrics.job_name,
+                                "workflow_name": metrics.workflow_name,
+                                "repository_id": str(metrics.repository_id),
+                                "repository": metrics.repository_name,
+                                "repository_full_name": metrics.repository_full_name,
+                                "conclusion": step.conclusion or "",
+                                "started_at": step.started_at.isoformat(),
+                                "completed_at": step.completed_at.isoformat(),
+                                "duration_seconds": str(step_duration),
+                            },
+                        )
+                    ]
                 )
