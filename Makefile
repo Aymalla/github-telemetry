@@ -72,12 +72,12 @@ run-frontend: ## Run frontend service locally
 run-backend: ## Run backend service locally
 	python -m src.backend.app
 
-start-gh-workflows-success: ## Trigger GitHub test workflows
+start-gh-workflows-success: ## Trigger GitHub test success workflows
 	for i in $(shell seq 1 10); do \
 		gh workflow run test-telemetry-duration.yml; \
 	done
 
-start-gh-workflows-failures: ## Trigger GitHub test workflows
+start-gh-workflows-failures: ## Trigger GitHub test failure workflows
 	for i in $(shell seq 1 10); do \
 		gh workflow run test-telemetry-failures.yml; \
 	done

@@ -57,7 +57,7 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
-pip install -e ".[dev]"
+make install-dev
 ```
 
 ## Configuration
@@ -76,47 +76,66 @@ pip install -e ".[dev]"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BACKEND_AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
-| `BACKEND_AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
-| `BACKEND_APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | (optional) |
-| `BACKEND_POLL_INTERVAL_SECONDS` | Queue polling interval | `5` |
-| `BACKEND_MAX_MESSAGES_PER_BATCH` | Max messages to process per batch | `32` |
-| `BACKEND_VISIBILITY_TIMEOUT_SECONDS` | Message visibility timeout | `300` |
+| `AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
+| `AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | (optional) |
+| `POLL_INTERVAL_SECONDS` | Queue polling interval | `5` |
+| `MAX_MESSAGES_PER_BATCH` | Max messages to process per batch | `32` |
+| `VISIBILITY_TIMEOUT_SECONDS` | Message visibility timeout | `300` |
 
 ## Running Locally
 
 ### Frontend Service
 
 ```bash
-# Set environment variables
+# Set environment variables in .env file or export them
 export AZURE_STORAGE_ACCOUNT_NAME="your-account-name"
 export GITHUB_WEBHOOK_SECRET="your-webhook-secret"
 
 # Run the frontend
-python -m uvicorn src.frontend.app:app --host 0.0.0.0 --port 8080
+make run-frontend
 ```
 
 ### Backend Service
 
 ```bash
-# Set environment variables
+# Set environment variables in .env file or export them
 export AZURE_STORAGE_ACCOUNT_NAME="your-account-name"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="your-appinsights-connection-string"
 
 # Run the backend
-python -m src.backend.app
+make run-backend
 ```
 
 ## Docker Deployment
 
-### Build Images
+### Build Images Locally
 
 ```bash
 # Build frontend
-docker build -f src/frontend/Dockerfile -t github-telemetry-frontend .
+make build-frontend
 
 # Build backend
-docker build -f src/backend/Dockerfile -t github-telemetry-backend .
+make build-backend
+
+# Build both
+make build
+```
+
+### Publish to Container Registry
+
+```bash
+# Set CONTAINER_REGISTRY in .env file
+# Example: CONTAINER_REGISTRY=myregistry.azurecr.io
+
+# Publish frontend
+make publish-frontend
+
+# Publish backend
+make publish-backend
+
+# Publish both
+make publish
 ```
 
 ### Run Containers
@@ -148,30 +167,68 @@ docker run -d \
 
 ## Development
 
+### Quick Start with Make
+
+```bash
+# Show all available commands
+make help
+
+# Install development dependencies
+make install-dev
+
+# Run tests
+make test
+
+# Run tests with coverage
+make test-cov
+
+# Lint code
+make lint
+
+# Format code
+make format
+
+# Type check
+make typecheck
+
+# Clean build artifacts
+make clean
+```
+
 ### Running Tests
 
 ```bash
 # Run all tests
-pytest
+make test
 
-# Run with coverage
-pytest --cov=src --cov-report=html
+# Run with coverage report
+make test-cov
 
 # Run specific test file
 pytest tests/shared/test_github_signature.py
 ```
 
-### Linting
+### Code Quality
 
 ```bash
-# Run ruff linter
-ruff check src tests
+# Run linter
+make lint
 
-# Run ruff formatter
-ruff format src tests
+# Format code
+make format
 
 # Run type checking
-mypy src
+make typecheck
+```
+
+### Testing GitHub Workflows
+
+```bash
+# Trigger 10 successful workflow test runs
+make start-gh-workflows-success
+
+# Trigger 10 failed workflow test runs
+make start-gh-workflows-failures
 ```
 
 ## API Endpoints
