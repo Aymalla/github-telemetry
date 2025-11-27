@@ -81,7 +81,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build frontend image
-        run: docker build -f src/frontend/Dockerfile -t github-telemetry-frontend .
-
-      - name: Build backend image
-        run: docker build -f src/backend/Dockerfile -t github-telemetry-backend .
+        run: make build-frontend
