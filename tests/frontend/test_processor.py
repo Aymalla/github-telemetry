@@ -5,9 +5,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.shared.models import QueueMessage
-from src.shared.processor import EventProcessor
-from src.shared.telemetry import TelemetryClient
+from src.frontend.models import QueueMessage
+from src.frontend.processor import EventProcessor
+from src.frontend.telemetry import TelemetryClient
 
 
 @pytest.fixture

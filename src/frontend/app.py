@@ -3,14 +3,17 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from src.shared.config import FrontendSettings
-from src.shared.github_signature import validate_github_signature
-from src.shared.queue_client import QueueClientWrapper, create_queue_client
+from src.frontend.config import FrontendSettings
+from src.frontend.github_signature import validate_github_signature
+from src.frontend.models import QueueMessage
+from src.frontend.processor import EventProcessor
+from src.frontend.telemetry import TelemetryClient, create_telemetry_client
 
 # Configure logging
 logging.basicConfig(
@@ -19,29 +22,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global settings and queue client
+# Global settings and telemetry
 settings = FrontendSettings()
-queue_client: QueueClientWrapper | None = None
+telemetry_client: TelemetryClient | None = None
+event_processor: EventProcessor | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan handler."""
-    global queue_client
+    global telemetry_client, event_processor
 
     logger.info("Starting webhook frontend service")
 
-    # Initialize queue client if account name is provided
-    if settings.azure_storage_account_name:
-        queue_client = create_queue_client(
-            settings.azure_storage_account_name,
-            settings.azure_storage_queue_name,
-        )
-        logger.info("Queue client initialized")
+    if settings.applicationinsights_connection_string:
+        telemetry_client = create_telemetry_client(settings.applicationinsights_connection_string)
+        event_processor = EventProcessor(telemetry_client)
+        logger.info("Application Insights telemetry initialized")
     else:
-        logger.warning(
-            "No Azure Storage account name provided. Events will be logged but not queued."
-        )
+        logger.warning("No Application Insights connection string provided.")
 
     yield
 
@@ -49,8 +48,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="GitHub Webhook Frontend",
-    description="Receives GitHub webhooks and queues them for processing",
+    title="GitHub Webhook Service",
+    description="Receives GitHub webhooks and processes telemetry in real-time",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -119,26 +118,32 @@ async def receive_webhook(
             content={"message": "Event type not processed", "event": event_type},
         )
 
-    # Queue the event for processing
-    if queue_client:
-        success = queue_client.send_message(
-            event_type=event_type,
-            delivery_id=delivery_id,
-            payload=payload,
+    # Process the event
+    if event_processor:
+        success = event_processor.process_message(
+            QueueMessage(
+                event_type=event_type,
+                delivery_id=delivery_id,
+                payload=payload,
+                received_at=datetime.now(UTC),
+            )
         )
         if not success:
-            logger.error("Failed to queue event: %s", delivery_id)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to queue event",
+                detail="Failed to process event",
             )
     else:
-        logger.info("Event logged (queue not configured): %s", payload)
+        logger.info(
+            "Event logged (processor not configured): event=%s, delivery=%s",
+            event_type,
+            delivery_id,
+        )
 
     return JSONResponse(
         status_code=status.HTTP_202_ACCEPTED,
         content={
-            "message": "Event received and queued",
+            "message": "Event received and processed",
             "event": event_type,
             "delivery": delivery_id,
         },

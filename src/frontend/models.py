@@ -62,7 +62,7 @@ class WorkflowRun(BaseModel):
     run_number: int
     run_attempt: int = 1
     event: str = ""
-    created_at: datetime | None = None
+    created_at: datetime
     updated_at: datetime | None = None
     run_started_at: datetime | None = None
     html_url: str = ""

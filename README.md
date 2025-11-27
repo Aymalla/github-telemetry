@@ -1,35 +1,25 @@
 # GitHub Telemetry
 
-Captures GitHub workflow, job, and step telemetry using GitHub webhooks. The solution uses two Azure Container Apps: a Webhook Frontend that exposes an HTTPS endpoint, validates GitHub calls, and pushes events to an Azure Storage Queue; and a Webhook Backend that pulls queued events, processes workflow metrics (start/end/duration), enriches them, and sends telemetry to Azure Application Insights for monitoring and analysis.
+Captures GitHub workflow, job, and step telemetry using GitHub webhooks. The solution uses an Azure Container App that exposes an HTTPS endpoint, validates GitHub webhook signatures, processes workflow metrics (start/end/duration), enriches them with repository and runner information, and sends telemetry directly to Azure Application Insights for monitoring and analysis.
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────────┐
-│   GitHub        │────▶│  Webhook         │────▶│  Azure Storage  │────▶│  Webhook         │
-│   Webhooks      │     │  Frontend        │     │  Queue          │     │  Backend         │
-│                 │     │  (Container App) │     │                 │     │  (Container App) │
-└─────────────────┘     └──────────────────┘     └─────────────────┘     └──────────────────┘
-                                                                                  │
-                                                                                  ▼
-                                                                         ┌──────────────────┐
-                                                                         │  Azure App       │
-                                                                         │  Insights        │
-                                                                         └──────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   GitHub        │────▶│  Webhook         │────▶│  Azure App       │
+│   Webhooks      │     │  Frontend        │     │  Insights        │
+│                 │     │  (Container App) │     │                  │
+└─────────────────┘     └──────────────────┘     └──────────────────┘
 ```
 
 ## Features
 
-- **Webhook Frontend**: HTTPS endpoint for receiving GitHub webhooks
+- **Webhook Service**: HTTPS endpoint for receiving and processing GitHub webhooks
   - Validates GitHub webhook signatures (HMAC-SHA256)
   - Filters for `workflow_run` and `workflow_job` events
-  - Queues events to Azure Storage Queue for reliable processing
-
-- **Webhook Backend**: Background processor for telemetry generation
-  - Polls Azure Storage Queue for new events
-  - Processes workflow metrics (start time, end time, duration)
+  - Processes workflow metrics (start time, end time, duration) in real-time
   - Enriches data with repository and runner information
-  - Sends telemetry to Azure Application Insights
+  - Sends telemetry directly to Azure Application Insights
 
 - **Telemetry Metrics**:
   - Workflow run duration
@@ -41,7 +31,6 @@ Captures GitHub workflow, job, and step telemetry using GitHub webhooks. The sol
 ## Prerequisites
 
 - Python 3.11+
-- Azure Storage Account with Queue service
 - Azure Application Insights instance
 - GitHub repository with webhook configured
 
@@ -69,57 +58,26 @@ make install-dev
 | `HOST` | Host to bind the server | `0.0.0.0` |
 | `PORT` | Port to bind the server | `8080` |
 | `GITHUB_WEBHOOK_SECRET` | GitHub webhook secret for signature validation | (empty) |
-| `AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
-| `AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | (required) |
 
-### Backend Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
-| `AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | (optional) |
-| `POLL_INTERVAL_SECONDS` | Queue polling interval | `5` |
-| `MAX_MESSAGES_PER_BATCH` | Max messages to process per batch | `32` |
-| `VISIBILITY_TIMEOUT_SECONDS` | Message visibility timeout | `300` |
 
 ## Running Locally
 
-### Frontend Service
-
 ```bash
 # Set environment variables in .env file or export them
-export AZURE_STORAGE_ACCOUNT_NAME="your-account-name"
 export GITHUB_WEBHOOK_SECRET="your-webhook-secret"
-
-# Run the frontend
-make run-frontend
-```
-
-### Backend Service
-
-```bash
-# Set environment variables in .env file or export them
-export AZURE_STORAGE_ACCOUNT_NAME="your-account-name"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="your-appinsights-connection-string"
 
-# Run the backend
-make run-backend
+# Run the service
+make run-frontend
 ```
 
 ## Docker Deployment
 
-### Build Images Locally
+### Build Image Locally
 
 ```bash
-# Build frontend
 make build-frontend
-
-# Build backend
-make build-backend
-
-# Build both
-make build
 ```
 
 ### Publish to Container Registry
@@ -128,31 +86,17 @@ make build
 # Set CONTAINER_REGISTRY in .env file
 # Example: CONTAINER_REGISTRY=myregistry.azurecr.io
 
-# Publish frontend
 make publish-frontend
-
-# Publish backend
-make publish-backend
-
-# Publish both
-make publish
 ```
 
-### Run Containers
+### Run Container
 
 ```bash
-# Run frontend
 docker run -d \
-  -e AZURE_STORAGE_ACCOUNT_NAME="..." \
   -e GITHUB_WEBHOOK_SECRET="..." \
+  -e APPLICATIONINSIGHTS_CONNECTION_STRING="..." \
   -p 8080:8080 \
   github-telemetry-frontend
-
-# Run backend
-docker run -d \
-  -e AZURE_STORAGE_ACCOUNT_NAME="..." \
-  -e APPLICATIONINSIGHTS_CONNECTION_STRING="..." \
-  github-telemetry-backend
 ```
 
 ## GitHub Webhook Configuration
@@ -195,32 +139,6 @@ make typecheck
 make clean
 ```
 
-### Running Tests
-
-```bash
-# Run all tests
-make test
-
-# Run with coverage report
-make test-cov
-
-# Run specific test file
-pytest tests/shared/test_github_signature.py
-```
-
-### Code Quality
-
-```bash
-# Run linter
-make lint
-
-# Format code
-make format
-
-# Run type checking
-make typecheck
-```
-
 ### Testing GitHub Workflows
 
 ```bash
@@ -249,49 +167,66 @@ Receives GitHub webhook events.
 - `X-Hub-Signature-256`: HMAC-SHA256 signature
 
 **Response**:
-- `202 Accepted`: Event queued successfully
+- `202 Accepted`: Event processed successfully
 - `200 OK`: Event type not processed (ignored)
 - `401 Unauthorized`: Invalid signature
 - `400 Bad Request`: Invalid payload
 
 ## Telemetry Data
 
-### Workflow Run Events
+Telemetry data is sent to Azure Application Insights. You can query and visualize the data using Kusto Query Language (KQL) in the Application Insights portal.
 
-```json
-{
-  "name": "WorkflowRun",
-  "properties": {
-    "workflow_run_id": "123456",
-    "workflow_name": "CI",
-    "repository_full_name": "owner/repo",
-    "status": "completed",
-    "conclusion": "success",
-    "triggered_by": "user"
-  },
-  "measurements": {
-    "duration_seconds": 540.0
-  }
-}
+```python
+MetricValue(
+      name="duration_seconds",
+      value=duration_seconds,
+      timestamp=datetime.now(UTC),
+      attributes={
+          "type": "workflow_run",
+          "duration_seconds": str(duration_seconds),
+          "queue_duration_seconds": str(queue_duration_seconds),
+          "created_at": run.created_at,
+          "started_at": run.run_started_at,
+          "completed_at": completed_at,
+          "run_id": str(run.id),
+          "workflow_name": run.name,
+          "run_number": str(run.run_number),
+          "run_attempt": str(run.run_attempt),
+          "repository_id": str(event.repository.id),
+          "repository": event.repository.name,
+          "repository_full_name": event.repository.full_name,
+          "status": run.status,
+          "conclusion": run.conclusion or "",
+          "event_trigger": run.event,
+          "head_branch": run.head_branch,
+          "triggered_by": event.sender.login,
+          "action": event.action,
+          "runner_name": run.runner_name or "",
+          "runner_group_name": run.runner_group_name or "",
+          "labels": run.labels,
+          "pool_name": self.get_mdp_name(run.labels),
+          "run_url": run.html_url,
+      },
+  )
 ```
 
-### Workflow Job Events
 
-```json
-{
-  "name": "WorkflowJob",
-  "properties": {
-    "job_id": "789012",
-    "job_name": "build",
-    "workflow_name": "CI",
-    "repository_full_name": "owner/repo",
-    "runner_name": "runner-1",
-    "labels": "ubuntu-latest"
-  },
-  "measurements": {
-    "duration_seconds": 360.0
-  }
-}
+## Scaling
+
+The webhook service can be scaled horizontally by deploying multiple instances behind a load balancer. Azure Container Apps provides automatic scaling based on HTTP traffic and custom metrics or Applying scalable arichitecture by adding Azure Storage Queue to decouple webhook reception from processing:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────────┐
+│   GitHub        │────▶│  Webhook         │────▶│  Azure Storage  │────▶│  Webhook       │
+│   Webhooks      │     │  Frontend        │     │  Queue          │     │  Backend         │
+│                 │     │  (Container App) │     │                 │     │  (Container App) │
+└─────────────────┘     └──────────────────┘     └─────────────────┘     └──────────────────┘
+                                                                                  │
+                                                                                  ▼
+                                                                         ┌──────────────────┐
+                                                                         │  Azure App       │
+                                                                         │  Insights        │
+                                                                         └──────────────────┘
 ```
 
 ## License
