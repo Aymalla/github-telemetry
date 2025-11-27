@@ -58,19 +58,8 @@ make install-dev
 | `HOST` | Host to bind the server | `0.0.0.0` |
 | `PORT` | Port to bind the server | `8080` |
 | `GITHUB_WEBHOOK_SECRET` | GitHub webhook secret for signature validation | (empty) |
-| `AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
-| `AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | (required) |
 
-### Backend Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AZURE_STORAGE_ACCOUNT_NAME` | Azure Storage account name | (required) |
-| `AZURE_STORAGE_QUEUE_NAME` | Name of the storage queue | `github-webhook-events` |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | (optional) |
-| `POLL_INTERVAL_SECONDS` | Queue polling interval | `5` |
-| `MAX_MESSAGES_PER_BATCH` | Max messages to process per batch | `32` |
-| `VISIBILITY_TIMEOUT_SECONDS` | Message visibility timeout | `300` |
 
 ## Running Locally
 
@@ -150,7 +139,6 @@ make typecheck
 make clean
 ```
 
-
 ### Testing GitHub Workflows
 
 ```bash
@@ -225,7 +213,21 @@ MetricValue(
 
 ## Scaling
 
-The webhook service can be scaled horizontally by deploying multiple instances behind a load balancer. Azure Container Apps provides automatic scaling based on HTTP traffic and custom metrics.
+The webhook service can be scaled horizontally by deploying multiple instances behind a load balancer. Azure Container Apps provides automatic scaling based on HTTP traffic and custom metrics or Applying scalable arichitecture by adding Azure Storage Queue to decouple webhook reception from processing:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────────┐
+│   GitHub        │────▶│  Webhook         │────▶│  Azure Storage  │────▶│  Webhook       │
+│   Webhooks      │     │  Frontend        │     │  Queue          │     │  Backend         │
+│                 │     │  (Container App) │     │                 │     │  (Container App) │
+└─────────────────┘     └──────────────────┘     └─────────────────┘     └──────────────────┘
+                                                                                  │
+                                                                                  ▼
+                                                                         ┌──────────────────┐
+                                                                         │  Azure App       │
+                                                                         │  Insights        │
+                                                                         └──────────────────┘
+```
 
 ## License
 
