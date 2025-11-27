@@ -16,7 +16,7 @@ from opentelemetry.sdk.metrics.export import (
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.util.instrumentation import InstrumentationScope
 
-from src.shared.models import MetricValue
+from src.frontend.models import MetricValue
 
 logger = logging.getLogger(__name__)
 

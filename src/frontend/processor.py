@@ -4,13 +4,13 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from src.shared.models import (
+from src.frontend.models import (
     MetricValue,
     QueueMessage,
     WorkflowJobEvent,
     WorkflowRunEvent,
 )
-from src.shared.telemetry import TelemetryClient
+from src.frontend.telemetry import TelemetryClient
 
 logger = logging.getLogger(__name__)
 
@@ -36,30 +36,22 @@ class EventProcessor:
             True if processed successfully, False otherwise
         """
         try:
-            event_type = message.event_type
-            payload = message.payload
-
-            if event_type == "workflow_run":
-                return self._process_workflow_run(message, payload)
-            elif event_type == "workflow_job":
-                return self._process_workflow_job(message, payload)
+            if message.event_type == "workflow_run":
+                return self._process_workflow_run(message.payload)
+            elif message.event_type == "workflow_job":
+                return self._process_workflow_job(message.payload)
             else:
-                logger.warning("Unknown event type: %s", event_type)
+                logger.warning("Unknown event type: %s", message.event_type)
                 return True  # Don't retry unknown events
 
         except Exception as e:
-            logger.error(
-                "Failed to process message %s: %s",
-                message.delivery_id,
-                str(e),
-            )
+            logger.error("Failed to process message: %s", str(e))
             return False
 
-    def _process_workflow_run(self, message: QueueMessage, payload: dict[str, Any]) -> bool:
+    def _process_workflow_run(self, payload: dict[str, Any]) -> bool:
         """Process a workflow_run event.
 
         Args:
-            message: Queue message
             payload: Event payload
 
         Returns:
@@ -71,13 +63,9 @@ class EventProcessor:
 
             # Calculate duration if completed
             if run.run_started_at and run.updated_at and run.status == "completed":
-                duration = run.updated_at - run.run_started_at
-                duration_seconds = duration.total_seconds()
-                queue_duration_seconds: float = 0
-                if run.created_at:
-                    queue_duration_seconds = (run.run_started_at - run.created_at).total_seconds()
-
                 completed_at: datetime = run.updated_at
+                duration_seconds = (completed_at - run.run_started_at).total_seconds()
+                queue_duration_seconds = (run.run_started_at - run.created_at).total_seconds()
 
                 # Send telemetry for the workflow run
                 self._telemetry.export(
@@ -129,11 +117,10 @@ class EventProcessor:
             logger.error("Failed to process workflow_run: %s", str(e))
             return False
 
-    def _process_workflow_job(self, message: QueueMessage, payload: dict[str, Any]) -> bool:
+    def _process_workflow_job(self, payload: dict[str, Any]) -> bool:
         """Process a workflow_job event.
 
         Args:
-            message: Queue message
             payload: Event payload
 
         Returns:

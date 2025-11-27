@@ -30,9 +30,8 @@ class FrontendSettings(BaseSettings):
     # GitHub webhook secret for signature validation
     github_webhook_secret: str = ""
 
-    # Azure Storage Queue settings
-    azure_storage_account_name: str = ""
-    azure_storage_queue_name: str = "github-webhook-events"
+    # Azure Application Insights settings
+    applicationinsights_connection_string: str = ""
 
     @model_validator(mode="before")
     @classmethod
@@ -46,29 +45,3 @@ class FrontendSettings(BaseSettings):
                 except (ValueError, TypeError):
                     values.pop("port", None)
         return values
-
-
-class BackendSettings(BaseSettings):
-    """Settings for the webhook backend service.
-
-    Unknown environment variables are ignored so that placeholder entries do
-    not break import-time configuration.
-    """
-
-    model_config = SettingsConfigDict(
-        env_prefix="",
-        env_file=".env",
-        extra="ignore",
-    )
-
-    # Azure Storage Queue settings
-    azure_storage_account_name: str = ""
-    azure_storage_queue_name: str = "github-webhook-events"
-
-    # Azure Application Insights settings
-    applicationinsights_connection_string: str = ""
-
-    # Processing settings
-    poll_interval_seconds: int = 5
-    max_messages_per_batch: int = 32
-    visibility_timeout_seconds: int = 300

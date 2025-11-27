@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from src.shared.models import (
+from src.frontend.models import (
     QueueMessage,
     WorkflowJobEvent,
     WorkflowRunEvent,

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev lint format test test-cov build-frontend build-backend build run-frontend run-backend clean
+.PHONY: help install install-dev lint format test test-cov build-frontend run-frontend clean
 
 # Load environment file if exists
 ENV_FILE := .env
@@ -49,28 +49,9 @@ publish-frontend: ## Publish frontend image to container registry
 	docker build -f src/frontend/Dockerfile -t $(CONTAINER_REGISTRY)/gh-telemetry-frontend:latest .
 	docker push $(CONTAINER_REGISTRY)/gh-telemetry-frontend:latest
 
-build-backend: ## Build backend Docker image locally
-	docker build -f src/backend/Dockerfile -t gh-telemetry-backend .
-
-publish-backend: ## Publish backend image to container registry
-	az acr login --name $(CONTAINER_REGISTRY)
-	docker build -f src/backend/Dockerfile -t $(CONTAINER_REGISTRY)/gh-telemetry-backend:latest .
-	docker push $(CONTAINER_REGISTRY)/gh-telemetry-backend:latest
-
-build: ## Build all Docker images locally
-	make build-frontend
-	make build-backend
-
-publish: ## Publish both frontend and backend images
-	make publish-frontend
-	make publish-backend
-
 # Run Locally
 run-frontend: ## Run frontend service locally
 	python -m uvicorn src.frontend.app:app --host 0.0.0.0 --port 8080 --reload
-
-run-backend: ## Run backend service locally
-	python -m src.backend.app
 
 start-gh-workflows-success: ## Trigger GitHub test success workflows
 	for i in $(shell seq 1 10); do \
